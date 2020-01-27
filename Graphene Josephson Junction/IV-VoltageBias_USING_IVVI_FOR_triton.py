@@ -141,8 +141,6 @@ for gate_count,Vg in enumerate(Vglist):
         T = -1
     current_array = []
 
-    ivvi.RampVoltage(S3b_dac, V_bias_list[0]/S3b_range*1e3,tt=1., steps = 10)  #biasing at reverse Voltage   
-
 
     ## Sweeping the bias voltage
     for V_bias in V_bias_list: 
