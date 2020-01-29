@@ -20,11 +20,11 @@ import sys
 
 
 ''' input ''' 
-prefix = 'F17_IV_h56_VBias_B2901'
+prefix = 'F17_IV_C4-1to234_VBias_B2901'
 path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
 
 
-V_bias_max = 5.5e-3 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
+V_bias_max = 0.5e-3 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
 V_bias_min = -V_bias_max #[V], 100 uV at Dirac point (~1kOhm) corresponds to 100uV/(1+3 kOhms) = 25 nA.
 delta_V_bias = V_bias_max/100 #[V]
 average_I = 10 #number of current measurement per Voltage point

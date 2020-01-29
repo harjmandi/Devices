@@ -36,8 +36,9 @@ from stlab.devices.He7Temperature import He7Temperature
 ''' Definitions'''
 
 # IO
-prefix = 'F17_RvsT_'
-sample_name = 'h56'
+prefix = 'F17_RvsT_h56'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
+
 do_plot = True
 save_data =True
 
@@ -103,7 +104,7 @@ pygame.display.set_mode((100,100))
 
 if save_data:
 	colnames = ['time (s)','temperature (K)', 'gate voltage (V)','leakage current (A)','resistance (ohm)', 'phase ()', 'demodulation duration (s)']
-	my_file= stlab.newfile(prefix+'_',sample_name,autoindex=True,colnames=colnames)
+	my_file= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames, mypath= path)
 
 
 

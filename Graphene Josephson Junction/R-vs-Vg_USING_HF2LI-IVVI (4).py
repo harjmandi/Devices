@@ -22,7 +22,7 @@ import time
 from my_poll_v2 import R_measure as R_measure
 import stlab
 import os
-from stlab.devices.Keysight_B2901A import Keysight_B2901A
+from stlab.devices.IVVI import IVVI_DAC
 import matplotlib.pyplot as plt
 import pygame, sys
 from pygame.locals import *
@@ -34,15 +34,19 @@ import math
 
 # definitions
 tempdev = -1
-prefix = 'F17_FE_C4-1to234_2probe'
+prefix = 'F17_FE_F3-1to234_2probe'
 path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
 
 time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
 ramp_speed = 500 # the safe speed for ramping the gate voltage [mV/s]
 target_gate = 70
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 300
+gate_points = 80
 safe_gate_current = 2.5e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
+
+s1h_gain = 45 # [V/V] manual gain set on S1h module 
+DAC = 1 # DAC linked to the S1h
+
 
 # HF2LI settings
 measure_amplitude = 0.1 #measurement amplitude [V]
@@ -58,8 +62,6 @@ bias_resistor = 1e8
 # Calibration parameters; experimentally achieved to adjst the resistance reading 
 	# CASE 1: bias resistance of 1M and demodulation_time_constant = 0.1 =>> calibration_factor = 1.45 and shift = 0
 	# CASE 2: bias resistance of 10M and demodulation_time_constant = 0.45 =>> calibration_factor = 0.65 and shift = 400
-
-
 calibration_factor = 0.65 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
 shift = 400 
 
@@ -81,12 +83,25 @@ zhinst.utils.api_server_version_check(daq)
 zhinst.utils.disable_everything(daq, device)
 out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
 
+# resetting the IVVI
+dev = IVVI_DAC('COM4') # IVVI
+dev.RampAllZero()
 
-# Keysight setting
-gate_dev = Keysight_B2901A('TCPIP::192.168.1.63::INSTR')
-gate_dev.SetModeVoltage()
-gate_dev.SetOutputOn()
-gate_dev.SetComplianceCurrent(safe_gate_current)
+ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
+dev.RampVoltage(DAC,1000*shift_voltage/s1h_gain,tt=ramp_time, steps = 20) # the factor 1000 is applied as the unit reads in mV.
+
+
+# initializing the Keithley for gate current measurement
+vmeasure = stlab.adi('TCPIP::192.168.1.105::INSTR',read_termination='\n') # with Keithley DMM6500
+vmeasure.write('SENS:VOLT:DC:RANG:AUTO 0')
+vmeasure.write('SENS:VOLT:DC:RANGE 2')
+vmeasure.write(':INIT:CONT 0')
+vmeasure.write('VOLT:NPLC 1')
+vmeasure.write('TRIG:SOUR IMM')
+vmeasure.write(":SYST:AZER:STAT OFF")
+vmeasure.write(":TRIG:COUN 1")
+gate_leakage_v_I_conversion = 1e-6 # conversion factor of the measured voltage on S1h 'Current monitor' to leakage current
+
 
 
 #############################################################
@@ -105,7 +120,7 @@ if save_data:
 	my_file_2= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames, mypath= path)
 
 ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
-gate_dev.RampVoltage(shift_voltage,tt=10*ramp_time, steps = 100)
+dev.RampVoltage(DAC,1000*shift_voltage/s1h_gain,tt=ramp_time, steps = 20) # the factor 1000 is applied as the unit reads in mV.
 
 gate_voltage_step = pattern['ramp_pattern'][1]-pattern['ramp_pattern'][0]
 # ramp_time = np.abs(np.floor(gate_voltage_step/ramp_speed))
@@ -127,24 +142,28 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 	if END:
 		break
 
-	gate_dev.RampVoltage(gate_voltage,tt=ramp_time, steps = 5)
+	
+	dev.RampVoltage(DAC,1000*gate_voltage/s1h_gain,tt=ramp_time) # the factor 1000 is applied as the unit reads in mV.
 
-	leakage_current = float(gate_dev.GetCurrent()) # in the units of [A]
+	leakage_current = 1e9*gate_leakage_v_I_conversion*float(vmeasure.query('READ?')) # in the units of [nA]
 
 	print ('\n\n------------------------')
-
+	
 
 	if watch_gate_leakage:
-		if np.abs(leakage_current) > safe_gate_current:
+		oxide_resistance = 1e-6*gate_voltage/(leakage_current*1e-9)
+		if np.abs(leakage_current*1e-9) > safe_gate_current:
 			GATE_LEAKAGE = True
-			print ('gate current', 1e9*leakage_current, ' nA exceeds safe gate current limit reaching the gate voltage of', gate_voltage, 'V.')
+			print ('gate current', leakage_current, ' nA exceeds safe gate current limit reaching the gate voltage of', gate_voltage, 'V.')
+			print ('dielectric resitance is only', oxide_resistance, 'MOhms.')
 			print ('reseting the gate voltage')
-			gate_dev.RampVoltage(0,tt=ramp_time, steps = 10)
+			dev.RampVoltage(DAC,0,tt=ramp_time)        
 			break
 
 	print('GATE: {:6.4f}'.format(gate_voltage), 'V')
+			
+	time.sleep(time_step)
 
-	# time.sleep(time_step)
 
 	measured = R_measure(device_id = 'dev352', 
 		amplitude = measure_amplitude, 
@@ -191,21 +210,20 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 
 	plt.subplot(2, 1, 2)
-	plt.plot(plt_Vg,1e9*plt_leak_curr, '--b', marker='.',markersize = 1, linewidth= 0.2)
+	plt.plot(plt_Vg,plt_leak_curr, '--b', marker='.',markersize = 1, linewidth= 0.2)
 	plt.ylabel('Leakage Current (nA)')
 	plt.xlabel('Gate Voltage (V)')
-	plt.title("Resistance = %4.2f k$\Omega$, Leackage Current = %4.2f nA" %(measured[0], 1e9*leakage_current))
+	plt.title("Resistance = %4.2f k$\Omega$, Leackage Current = %4.2f nA" %(measured[0], leakage_current))
 
 	plt.pause(0.1)
 
 
 print('RAMPING FINISHED')
 
-gate_dev.RampVoltage(0,tt=ramp_time*10) # to safely return back the gate voltage
+dev.RampVoltage(DAC,0,tt=ramp_time) # to safely return back the gate voltage
 
  
 zhinst.utils.disable_everything(daq, device)
-gate_dev.SetOutputOff()
 
 print('FINISHED')
 

@@ -35,15 +35,15 @@ from stlab.devices.He7Temperature import He7Temperature
 
 
 ''' input ''' 
-prefix = 'F17_IV_8ab_VBias'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/')
+prefix = 'F17_IV_test100ohm_VBias'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
 
 
-V_bias_max = 5e-3 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
+V_bias_max = 25e-3 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
 V_bias_min = -V_bias_max #[V], 100 uV at Dirac point (~1kOhm) corresponds to 100uV/(1+3 kOhms) = 25 nA.
-delta_V_bias = V_bias_max/200 #[V]
-measure_average = 20 # number of the measurements per each bias Voltage for averaging
-time_sleep_measure = 0.1 # sleep time in between measurements
+delta_V_bias = V_bias_max/100 #[V]
+measure_average = 10 # number of the measurements per each bias Voltage for averaging
+time_sleep_measure = 0.1 # slee time in between measurements
 calibrate = False # Calibrate for the internal resistances of the measurement units
 
 Vgmax = 0 # Maximum gate voltage [V]
@@ -61,7 +61,7 @@ S3b_dac = 5  #DAC number for Voltage source
 M1b_gain = 1e6  #V/A gain for current to voltage conversion, set on M1b unit
 M1b_postgain_switch = 1 #postgain switch [x100ac x1 x100dc], set on M1b unit
 S1h_gain = 45. #V/V gain for the applied gate, set on S1h
-S3b_range = 10e-3  #Full range of the applied current, set on S4c
+S3b_range = 100e-3  #Full range of the applied current, set on S4c
 
 M1b_total_gain = M1b_gain*M1b_postgain_switch
 
@@ -87,10 +87,11 @@ pygame.display.set_mode((100,100))
 ## Temperature readout
 mytriton = TritonWrapper()
 
-try:
-    T = He7Temperature(addr='145.94.39.138',verb=False).GetTemperature()
-except:
-    T = -1
+# try:
+#     T = He7Temperature(addr='145.94.39.138',verb=False).GetTemperature()
+# except:
+#     T = -1
+T = -1
 
 ## Output setting
 idstring = '_at{:.2f}mK'.format(T).replace('.','p')
@@ -231,9 +232,12 @@ for gate_count,Vg in enumerate(Vglist):
 
 
             plt.subplot(2,1,2)
-            plt.plot((V_bias_array[1:]+delta_V_bias/2)*1e6,r, '--r', marker='.', linewidth=1, alpha=0.9, label='{:.0f}Vg'.format(Vg))
-            if calibrate: plt.ylim(0,1.1*r_max)
-            plt.ylabel('dV/dI [$\Omega$]')
+            plt.plot((V_bias_array[1:]+delta_V_bias/2)*1e6,r/1000, '--r', marker='.', linewidth=1, alpha=0.9, label='{:.0f}Vg'.format(Vg))
+            if calibrate: 
+                plt.ylim(0,1.1*r_max)
+            else: 
+                plt.ylim(3.5,20)
+            plt.ylabel('dV/dI [$k\Omega$]')
             plt.xlabel('bias Voltage [$\mu$V]')
             plt.xlim(V_bias_min*1e6,V_bias_max*1e6)
 

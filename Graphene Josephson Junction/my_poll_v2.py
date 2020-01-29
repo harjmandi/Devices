@@ -60,7 +60,7 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		daq.unsubscribe('*')
 
 		# Wait for the demodulator filter to settle.
-		time.sleep(10*time_constant)
+		time.sleep(3*time_constant)
 
 		# Perform a global synchronisation between the device and the data server:
 		# Ensure that 1. the settings have taken effect on the device before issuing
