@@ -26,20 +26,19 @@ from stlab.devices.Keysight_B2901A import Keysight_B2901A
 import matplotlib.pyplot as plt
 import pygame, sys
 from pygame.locals import *
-
+import math
 
 #############################################################
 ''' Definitions'''
 
 # definitions
-tempdev = -1
-prefix = 'F17_C4-12'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
-
+tempdev = 0.016
+prefix = 'F15_a6_0103'
+sample_name = '2probe'
 device_id = 'dev352'
 time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
 ramp_speed = 1500 # the safe speed for ramping the gate voltage [mV/s]
-target_gate = 50
+target_gate = 20
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
 gate_points = 200
 safe_gate_current = 2.5e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
@@ -52,7 +51,7 @@ measure_frequency = 77 #[Hz]
 demodulation_time_constant = 0.01
 deamodulation_duration = 0.3
 
-bias_resistor = 1e7
+bias_resistor = 1e6
 calibration_factor = 1.45 # to compensate the shift in resistance measurement
 
 
@@ -93,9 +92,10 @@ pattern = gate_pattern(target_gate=target_gate, mode='double', data_points=gate_
 count = 0 # couter of step numbers
 leakage_current = 0
 
+idstring = sample_name
 if save_data:
 	colnames = ['step ()','gate voltage (V)','leakage current (nA)','Resistance (k ohm)','phase ()', 'demodulation duration (s)']
-	my_file_2= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames)
+	my_file_2= stlab.newfile(prefix+'_',idstring,autoindex=True,colnames=colnames)
 
 ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
 gate_dev.RampVoltage(shift_voltage,tt=10*ramp_time, steps = 100)
@@ -154,7 +154,7 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 	line = [count,gate_voltage, leakage_current] + measured
 
 	if save_data:
-		stlab.writeline(my_file_2,line, mypath= path)
+		stlab.writeline(my_file_2,line)
 
 
 
@@ -226,7 +226,7 @@ if save_data:
 		demodulation_time_constant,
 		T]
 	my_file= stlab.newfile(prefix+'_',idstring + '_metadata',autoindex=False,colnames=parameters,usefolder=False,mypath = os.path.dirname(my_file_2.name),usedate=False)
-	stlab.writeline(my_file,parameters_line, mypath= path)
+	stlab.writeline(my_file,parameters_line)
 
 	# saving the plots
 	title = 'Resistance'

@@ -1,84 +1,89 @@
-''' This program uses KEYSIGHT B2901A to apply a gate voltage and HF2LI lock-in amplifier to measure the resistance of the sample
+''' This program uses IVVI S1H to apply a gate voltage and HF2LI lock-in amplifier to measure the resistance of the sample
 
 
 
-	Hardware to be used:
-		- SMU B2901A: For gating
-		- A bias resistance of 1M: As voltage to current converter for lock-in out put.
+	Hardware to be used: 
+		- IVVI DAC (S1h): For gating
+		- IVVI DAC (S4c): As voltage to current converter for lock-in out put. Alternatively an external bios resistor can be used for this purpose.
 			Note that there is always errors in reading the resitance of the device; the error is around -33% depending on the gain on S4c (see the excel file "Calibrate S4c gain.xlsx").
-
+		
 		- HF2LI: to measure the resistance of graphene device
+		- Keithley 2000 or DMM6500:  to measure the leakacge current
+		- He7Temperature: to measure the temperature of the fridge
+	
 
 
+	Before runnign the programm: 
+		- Make sure that in S2d, the appropriate DAC (in cyurrent version, DAC 1) is set to S1h.
+		- Make sure that in S2d, the appropriate connection between Dual iso-in (Iso-Amp1) and S4c (E1) is made. 
+		- Set an appropriate gain on the S1h
 
 
+ 
 '''
-import numpy as np
+
 import zhinst.utils
-
+import numpy as np
 from gate_pattern import gate_pattern
-
 import time
-from my_poll_v2 import R_measure as R_measure
+from my_poll import R_measure as R_measure
 import stlab
 import os
+from stlab.devices.He7Temperature import He7Temperature
 from stlab.devices.IVVI import IVVI_DAC
 import matplotlib.pyplot as plt
-import pygame, sys
-from pygame.locals import *
-import math
 
 
 #############################################################
 ''' Definitions'''
 
 # definitions
-tempdev = -1
-prefix = 'F17_FE_F3-1to234_2probe'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
+prefix = 'F10_comparand_0102'
+sample_name = '2probe'
+device_id = 'dev352'
+time_step = 0.2 #time step between each gate voltage steps, to stablize the gate
+ramp_spead = 500 # the safe spead for ramping the gate voltage [mV/s]
+target_gate = 0.4
+shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0. 
+gate_points = 20
 
-time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
-ramp_speed = 500 # the safe speed for ramping the gate voltage [mV/s]
-target_gate = 70
-shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 80
-safe_gate_current = 2.5e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
-
-s1h_gain = 45 # [V/V] manual gain set on S1h module 
+# IVVI settings
+s1h_gain = 15 # [V/V] manual gain set on S1h module 
 DAC = 1 # DAC linked to the S1h
 
-
 # HF2LI settings
-measure_amplitude = 0.1 #measurement amplitude [V]
+measure_amplitude = 1 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 2437 #[Hz]
-demodulation_time_constant = 0.45
-deamodulation_duration = 1
+measure_frequency = 77 #[Hz]
+demodulation_time_constant = 0.01
+deamodulation_duration = 0.1 
+
+measure_i_v_conversion = 1e-6 # the gain of 1e-6 (1u) gives more accurate results for the resistances in the range of 100Ohm upto 1MOhm (always around -33% to -38%, see the file "Calibrate S4c gain.xlsx")  
+
+bias_resistor = 1/measure_i_v_conversion # when using S4c as a current source 
+# bias_resistor = 10e6 # when using a bias resitor for V/I conversion
 
 
-bias_resistor = 1e8
 
-# Calibration parameters; experimentally achieved to adjst the resistance reading 
-	# CASE 1: bias resistance of 1M and demodulation_time_constant = 0.1 =>> calibration_factor = 1.45 and shift = 0
-	# CASE 2: bias resistance of 10M and demodulation_time_constant = 0.45 =>> calibration_factor = 0.65 and shift = 400
-calibration_factor = 0.65 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
-shift = 400 
+# Keithley setting
+safe_gate_current = 2500 # [nA], safe current leakage limit, above this limit S1h unit gives an error. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
+# min_oxide_resitance = 5e5 # minimum acceptable oxide restance, without considering leacky oxide.   
+
 
 # output setting
 do_plot = True
 watch_gate_leakage = True # monitors the gate leakage and stops above the safe leakage limit
 save_data =True
 
-pygame.init()
-pygame.display.set_mode((100,100))
+
 
 ##########################################################
 ''' Initializing the devices '''
 
 # initial configuration of the Lock-in
 apilevel_example = 6  # The API level supported by this example.
-(daq, device, props) = zhinst.utils.create_api_session('dev352', apilevel_example, required_devtype='.*LI|.*IA|.*IS')
+(daq, device, props) = zhinst.utils.create_api_session(device_id, apilevel_example, required_devtype='.*LI|.*IA|.*IS')
 zhinst.utils.api_server_version_check(daq)
 zhinst.utils.disable_everything(daq, device)
 out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
@@ -87,12 +92,11 @@ out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
 dev = IVVI_DAC('COM4') # IVVI
 dev.RampAllZero()
 
-ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
-dev.RampVoltage(DAC,1000*shift_voltage/s1h_gain,tt=ramp_time, steps = 20) # the factor 1000 is applied as the unit reads in mV.
-
-
 # initializing the Keithley for gate current measurement
 vmeasure = stlab.adi('TCPIP::192.168.1.105::INSTR',read_termination='\n') # with Keithley DMM6500
+# vmeasure=stlab.adi("ASRL1::INSTR") #with Keithley 2000
+
+
 vmeasure.write('SENS:VOLT:DC:RANG:AUTO 0')
 vmeasure.write('SENS:VOLT:DC:RANGE 2')
 vmeasure.write(':INIT:CONT 0')
@@ -101,6 +105,10 @@ vmeasure.write('TRIG:SOUR IMM')
 vmeasure.write(":SYST:AZER:STAT OFF")
 vmeasure.write(":TRIG:COUN 1")
 gate_leakage_v_I_conversion = 1e-6 # conversion factor of the measured voltage on S1h 'Current monitor' to leakage current
+
+# initializing the temperature reading 
+tempdev = He7Temperature(addr='192.168.1.249',verb=False)
+
 
 
 
@@ -115,34 +123,26 @@ pattern = gate_pattern(target_gate=target_gate, mode='double', data_points=gate_
 count = 0 # couter of step numbers
 leakage_current = 0
 
+idstring = sample_name
 if save_data:
 	colnames = ['step ()','gate voltage (V)','leakage current (nA)','Resistance (k ohm)','phase ()', 'demodulation duration (s)']
-	my_file_2= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames, mypath= path)
+	my_file_2= stlab.newfile(prefix+'_',idstring,autoindex=True,colnames=colnames)
 
-ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
-dev.RampVoltage(DAC,1000*shift_voltage/s1h_gain,tt=ramp_time, steps = 20) # the factor 1000 is applied as the unit reads in mV.
+ramp_time = np.abs(np.floor(shift_voltage/ramp_spead))
+dev.RampVoltage(DAC,1000*shift_voltage/s1h_gain,tt=ramp_time) # the factor 1000 is applied as the unit reads in mV.
+
 
 gate_voltage_step = pattern['ramp_pattern'][1]-pattern['ramp_pattern'][0]
-# ramp_time = np.abs(np.floor(gate_voltage_step/ramp_speed))
-ramp_time = 0.5
+ramp_time = np.abs(np.floor(gate_voltage_step/ramp_spead))
+
 plt_Vg=np.array([])
 plt_resistance=np.array([])
 plt_leak_curr=np.array([])
 
 
-END = False
 
 for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the gate voltage
 
-	for event in pygame.event.get():
-		if event.type == QUIT:sys.exit()
-		elif event.type == KEYDOWN and event.dict['key'] == 101:
-			END = True
-
-	if END:
-		break
-
-	
 	dev.RampVoltage(DAC,1000*gate_voltage/s1h_gain,tt=ramp_time) # the factor 1000 is applied as the unit reads in mV.
 
 	leakage_current = 1e9*gate_leakage_v_I_conversion*float(vmeasure.query('READ?')) # in the units of [nA]
@@ -152,7 +152,7 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 	if watch_gate_leakage:
 		oxide_resistance = 1e-6*gate_voltage/(leakage_current*1e-9)
-		if np.abs(leakage_current*1e-9) > safe_gate_current:
+		if np.abs(leakage_current) > safe_gate_current:
 			GATE_LEAKAGE = True
 			print ('gate current', leakage_current, ' nA exceeds safe gate current limit reaching the gate voltage of', gate_voltage, 'V.')
 			print ('dielectric resitance is only', oxide_resistance, 'MOhms.')
@@ -164,36 +164,22 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 			
 	time.sleep(time_step)
 
-
-	measured = R_measure(device_id = 'dev352', 
-		amplitude = measure_amplitude, 
+	measured = R_measure(device_id, amplitude=measure_amplitude, 
 		out_channel = measure_output_channnel, 
 		in_channel = measure_input_channnel, 
 		time_constant = demodulation_time_constant, 
 		frequency = measure_frequency, 
 		poll_length = deamodulation_duration, 
-		device = device, 
-		daq = daq, 
-		out_mixer_channel = out_mixer_channel, 
-		bias_resistor = bias_resistor, 
-		in_range = 4e-3, 
-		out_range = 100e-3, 
-		diff = False, 
-		calibration_factor = 1.45, 
-		add = False, 
-		offset = 0, 
-		ac = False)
-
-	measured[0] = calibration_factor * measured[0] + shift
+		device=device, daq=daq, 
+		out_mixer_channel=out_mixer_channel, 
+		bias_resistor=bias_resistor)
 	line = [count,gate_voltage, leakage_current] + measured
-
+	
 	if save_data:
 		stlab.writeline(my_file_2,line)
-
-
-
-	print('LEAKAGE CURRENT: {:6.4f}'.format(1e9*leakage_current), 'nA')
-	print('RESISTANCE: {:6.2f}'.format(measured[0]), 'Ohms')
+	
+	print('LEAKAGE CURRENT: {:6.4f}'.format(leakage_current), 'nA')
+	print('RESISTANCE: {:6.2f}'.format(measured[0]), 'kOhms')
 	print('PHASE {:4.2f}'.format(measured[1]))
 
 	plt_Vg = np.append(plt_Vg,gate_voltage)
@@ -202,18 +188,17 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 	plt.rcParams["figure.figsize"] = [16,9]
 	plt.subplot(2, 1, 1)
-	plt.plot(plt_Vg,plt_resistance, '--b',marker='.', markersize = 1, linewidth= 0.2)
-	# plt.yscale ('log')
-	plt.ylabel('Resistance ($\Omega$)')
-	# plt.ylim(1, 1000)
-	plt.title(prefix)
+	plt.plot(plt_Vg,plt_resistance, '--r',marker='o')
+	
+	plt.ylabel('Resistance (kOhm)')
+	plt.text(60, .025,['Resitance =', measured[0], 'k Ohm'])
 
 
 	plt.subplot(2, 1, 2)
-	plt.plot(plt_Vg,plt_leak_curr, '--b', marker='.',markersize = 1, linewidth= 0.2)
+	plt.plot(plt_Vg,plt_leak_curr, '--r', marker='o')
 	plt.ylabel('Leakage Current (nA)')
 	plt.xlabel('Gate Voltage (V)')
-	plt.title("Resistance = %4.2f k$\Omega$, Leackage Current = %4.2f nA" %(measured[0], leakage_current))
+	plt.text(60, .025,['Leackage Current =', leakage_current , 'nA'])
 
 	plt.pause(0.1)
 
@@ -222,8 +207,9 @@ print('RAMPING FINISHED')
 
 dev.RampVoltage(DAC,0,tt=ramp_time) # to safely return back the gate voltage
 
- 
+
 zhinst.utils.disable_everything(daq, device)
+dev.close()
 
 print('FINISHED')
 
@@ -238,7 +224,7 @@ if save_data:
 	plt.savefig(os.path.dirname(my_file_2.name)+'\\'+prefix)
 	my_file_2.close()
 
-	parameters = ['target gate (V)',
+	parameters = ['target gate (V)', 
 		'time step (s)',
 		'gate points ()',
 		'measure amplitude (V)',
@@ -248,8 +234,7 @@ if save_data:
 		'demodulation time constant (s)',
 		'temperature (K)']
 
-	T = tempdev
-
+	T = tempdev.GetTemperature()
 	parameters_line =[target_gate,
 		time_step,
 		gate_points,
@@ -259,7 +244,7 @@ if save_data:
 		deamodulation_duration,
 		demodulation_time_constant,
 		T]
-	my_file= stlab.newfile(prefix,'_metadata',autoindex=False,colnames=parameters,usefolder=False,mypath = os.path.dirname(my_file_2.name),usedate=False)
+	my_file= stlab.newfile(prefix+'_',idstring + '_metadata',autoindex=False,colnames=parameters,usefolder=False,mypath = os.path.dirname(my_file_2.name),usedate=False)
 	stlab.writeline(my_file,parameters_line)
 
 	# saving the plots

@@ -21,7 +21,7 @@ import numpy as np
 import zhinst.utils
 
 import time
-from my_poll import R_measure as R_measure
+from my_poll_v2 import R_measure as R_measure
 import stlab
 import stlabutils
 import os
@@ -36,8 +36,8 @@ from stlab.devices.He7Temperature import He7Temperature
 ''' Definitions'''
 
 # IO
-prefix = 'F17_RvsT_h56'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
+prefix = 'F18_e6_RvsT_'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-02-11 measurements/'
 
 do_plot = True
 save_data =True
@@ -54,11 +54,11 @@ measure_pattern_T = np.array([300, 150, 50, 10, 4]) # Different temperature rang
 measure_pattern_dT = np.array([30, 10, 5, 1, 0.1]) # Temperature steps to run a resistance measurements
 # measure_pattern_dT = np.array([0.1, 0.1, 1, 1, 0.1]) # Temperature steps to run a resistance measurements
 
-measure_pattern_dt = np.array([5*60, 2*60, 30, 10, 1]) # Time span between two subsequent temperature readings
+measure_pattern_dt = np.array([5*60, 2*60, 30, 15, 5]) # Time span between two subsequent temperature readings
 # measure_pattern_dt = np.array([10, 10, 60, 10, 1]) # Time span between two subsequent temperature readings
 
 # HF2LI settings
-bias_resistor = 1e6
+bias_resistor = 1e8
 
 
 ##########################################################
@@ -74,10 +74,12 @@ out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
 measure_amplitude = 0.1 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 77 #[Hz]
-demodulation_time_constant = 0.01
-deamodulation_duration = 0.1
-calibration_factor = 1.45 # to compensate the shift in resistance measurement
+measure_frequency = 2437 #[Hz]
+demodulation_time_constant = 0.45
+deamodulation_duration = 1
+
+calibration_factor = 1 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
+shift = 400 
 
 
 ## Temperature readout
@@ -121,27 +123,41 @@ RESISTANCE = np.empty(shape=(0))
 while (not END):
 
 	t =  time.time()-INI_time
-	T = tempdev.GetTemperature()
+	
+	try: 
+		T = tempdev.GetTemperature()
+	except: 
+		pass
+
 	print ('Temp = ', T)
 
 	ind = np.where(measure_pattern_T >= T)
-
-
+	
 	if np.abs(T0 - T) > measure_pattern_dT[ind[0][-1]]:
 		print ('MEASUREING ...')
 
 		measured = R_measure(device_id = 'dev352', 
-			amplitude=measure_amplitude,
-			out_channel = measure_output_channnel,
-			in_channel = measure_input_channnel,
-			time_constant = demodulation_time_constant,
-			frequency = measure_frequency,
-			poll_length = deamodulation_duration,
-			device=device, daq=daq,
-			out_mixer_channel=out_mixer_channel,
-			bias_resistor=bias_resistor)
+		amplitude = measure_amplitude, 
+		out_channel = measure_output_channnel, 
+		in_channel = measure_input_channnel, 
+		time_constant = demodulation_time_constant, 
+		frequency = measure_frequency, 
+		poll_length = deamodulation_duration, 
+		device = device, 
+		daq = daq, 
+		out_mixer_channel = out_mixer_channel, 
+		bias_resistor = bias_resistor, 
+		in_range = 4e-3, 
+		out_range = 100e-3, 
+		diff = False, 
+		calibration_factor = 1, 
+		add = False, 
+		offset = 0, 
+		ac = False)
 
-		measured[0]*=(np.cos(math.radians(measured[1]))*calibration_factor*1000) 
+		measured[0] = calibration_factor * measured[0] + shift
+
+		print('resistance =', measured[0])
 
 		line = [t,T, gate, leakage_current] + measured
 
@@ -160,7 +176,7 @@ while (not END):
 
 		plt.ylabel('Resistance ($\Omega$)')
 		plt.xlim(np.min(TEMPERATURE),np.max(TEMPERATURE))
-		plt.title(prefix+ sample_name)
+		plt.title(prefix)
 
 
 		plt.subplot(2, 1, 2)
@@ -173,6 +189,7 @@ while (not END):
 		plt.plot(TEMPERATURE[:-1], np.diff(RESISTANCE)/np.diff(TEMPERATURE), '--b', marker='.',markersize = 1.5, linewidth=0.5, alpha=0.9)
 		plt.xlabel('Temperature (K)')
 		plt.xlim(np.min(TEMPERATURE),np.max(TEMPERATURE))
+		plt.ylim(0, 200)
 
 		plt.ylabel('$\Delta$R/$\Delta$T ($\Omega/K$)')
 

@@ -19,7 +19,7 @@ import zhinst.utils
 from gate_pattern import gate_pattern
 
 import time
-from my_poll import R_measure as R_measure
+from my_poll_v2 import R_measure as R_measure
 import stlab
 import os
 from stlab.devices.Keysight_B2901A import Keysight_B2901A
@@ -28,32 +28,40 @@ import pygame, sys
 from pygame.locals import *
 import math
 
+
 #############################################################
 ''' Definitions'''
 
 # definitions
-tempdev = 0.016
-prefix = 'F15_a6_0103'
-sample_name = '2probe'
-device_id = 'dev352'
+tempdev = -1
+prefix = 'F17_FE_C4-1to234_2probe'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
+
 time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
-ramp_speed = 1500 # the safe speed for ramping the gate voltage [mV/s]
-target_gate = 20
+ramp_speed = 500 # the safe speed for ramping the gate voltage [mV/s]
+target_gate = 70
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 200
+gate_points = 300
 safe_gate_current = 2.5e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
 
 # HF2LI settings
 measure_amplitude = 0.1 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 77 #[Hz]
-demodulation_time_constant = 0.01
-deamodulation_duration = 0.3
+measure_frequency = 2437 #[Hz]
+demodulation_time_constant = 0.45
+deamodulation_duration = 1
 
-bias_resistor = 1e6
-calibration_factor = 1.45 # to compensate the shift in resistance measurement
 
+bias_resistor = 1e8
+
+# Calibration parameters; experimentally achieved to adjst the resistance reading 
+	# CASE 1: bias resistance of 1M and demodulation_time_constant = 0.1 =>> calibration_factor = 1.45 and shift = 0
+	# CASE 2: bias resistance of 10M and demodulation_time_constant = 0.45 =>> calibration_factor = 0.65 and shift = 400
+
+
+calibration_factor = 0.65 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
+shift = 400 
 
 # output setting
 do_plot = True
@@ -68,7 +76,7 @@ pygame.display.set_mode((100,100))
 
 # initial configuration of the Lock-in
 apilevel_example = 6  # The API level supported by this example.
-(daq, device, props) = zhinst.utils.create_api_session(device_id, apilevel_example, required_devtype='.*LI|.*IA|.*IS')
+(daq, device, props) = zhinst.utils.create_api_session('dev352', apilevel_example, required_devtype='.*LI|.*IA|.*IS')
 zhinst.utils.api_server_version_check(daq)
 zhinst.utils.disable_everything(daq, device)
 out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
@@ -92,10 +100,9 @@ pattern = gate_pattern(target_gate=target_gate, mode='double', data_points=gate_
 count = 0 # couter of step numbers
 leakage_current = 0
 
-idstring = sample_name
 if save_data:
 	colnames = ['step ()','gate voltage (V)','leakage current (nA)','Resistance (k ohm)','phase ()', 'demodulation duration (s)']
-	my_file_2= stlab.newfile(prefix+'_',idstring,autoindex=True,colnames=colnames)
+	my_file_2= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames, mypath= path)
 
 ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
 gate_dev.RampVoltage(shift_voltage,tt=10*ramp_time, steps = 100)
@@ -139,18 +146,26 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 	# time.sleep(time_step)
 
-	measured = R_measure(device_id, amplitude=measure_amplitude,
-		out_channel = measure_output_channnel,
-		in_channel = measure_input_channnel,
-		time_constant = demodulation_time_constant,
-		frequency = measure_frequency,
-		poll_length = deamodulation_duration,
-		device=device, daq=daq,
-		out_mixer_channel=out_mixer_channel,
-		bias_resistor=bias_resistor)
+	measured = R_measure(device_id = 'dev352', 
+		amplitude = measure_amplitude, 
+		out_channel = measure_output_channnel, 
+		in_channel = measure_input_channnel, 
+		time_constant = demodulation_time_constant, 
+		frequency = measure_frequency, 
+		poll_length = deamodulation_duration, 
+		device = device, 
+		daq = daq, 
+		out_mixer_channel = out_mixer_channel, 
+		bias_resistor = bias_resistor, 
+		in_range = 4e-3, 
+		out_range = 100e-3, 
+		diff = False, 
+		calibration_factor = 1.45, 
+		add = False, 
+		offset = 0, 
+		ac = False)
 
-	measured[0]*=(np.cos(math.radians(measured[1]))*calibration_factor)
-
+	measured[0] = calibration_factor * measured[0] + shift
 	line = [count,gate_voltage, leakage_current] + measured
 
 	if save_data:
@@ -159,7 +174,7 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 
 	print('LEAKAGE CURRENT: {:6.4f}'.format(1e9*leakage_current), 'nA')
-	print('RESISTANCE: {:6.2f}'.format(measured[0]), 'kOhms')
+	print('RESISTANCE: {:6.2f}'.format(measured[0]), 'Ohms')
 	print('PHASE {:4.2f}'.format(measured[1]))
 
 	plt_Vg = np.append(plt_Vg,gate_voltage)
@@ -168,14 +183,15 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 	plt.rcParams["figure.figsize"] = [16,9]
 	plt.subplot(2, 1, 1)
-	plt.plot(plt_Vg,plt_resistance, '--r',marker='o')
-
-	plt.ylabel('Resistance (k$\Omega$)')
-	plt.title("Resitance = %4.2f k$\Omega$" %measured[0])
+	plt.plot(plt_Vg,plt_resistance, '--b',marker='.', markersize = 1, linewidth= 0.2)
+	# plt.yscale ('log')
+	plt.ylabel('Resistance ($\Omega$)')
+	# plt.ylim(1, 1000)
+	plt.title(prefix)
 
 
 	plt.subplot(2, 1, 2)
-	plt.plot(plt_Vg,1e9*plt_leak_curr, '--r', marker='o')
+	plt.plot(plt_Vg,1e9*plt_leak_curr, '--b', marker='.',markersize = 1, linewidth= 0.2)
 	plt.ylabel('Leakage Current (nA)')
 	plt.xlabel('Gate Voltage (V)')
 	plt.title("Resistance = %4.2f k$\Omega$, Leackage Current = %4.2f nA" %(measured[0], 1e9*leakage_current))
@@ -185,9 +201,9 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 print('RAMPING FINISHED')
 
-gate_dev.RampVoltage(0,tt=ramp_time) # to safely return back the gate voltage
+gate_dev.RampVoltage(0,tt=ramp_time*10) # to safely return back the gate voltage
 
-
+ 
 zhinst.utils.disable_everything(daq, device)
 gate_dev.SetOutputOff()
 
@@ -225,7 +241,7 @@ if save_data:
 		deamodulation_duration,
 		demodulation_time_constant,
 		T]
-	my_file= stlab.newfile(prefix+'_',idstring + '_metadata',autoindex=False,colnames=parameters,usefolder=False,mypath = os.path.dirname(my_file_2.name),usedate=False)
+	my_file= stlab.newfile(prefix,'_metadata',autoindex=False,colnames=parameters,usefolder=False,mypath = os.path.dirname(my_file_2.name),usedate=False)
 	stlab.writeline(my_file,parameters_line)
 
 	# saving the plots
