@@ -33,23 +33,24 @@ from stlab.devices.He7Temperature import He7Temperature
 
 
 ''' input ''' 
-prefix = 'F18_h3-0103_IV_IVVI_VBias'
+prefix = 'F18_e7_IV_IVVI_VBias_250mK_'
 
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-02-11 measurements/'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-03-04 measurements with LP filters/'
 
 T = 0.285 # Temperature
 
-V_bias_max = 50e-6 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
+V_bias_max = 10e-6 # [V] Maximum bias Voltage, The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
 V_bias_min = -V_bias_max #[V], 100 uV at Dirac point (~1kOhm) corresponds to 100uV/(1+3 kOhms) = 25 nA.
-delta_V_bias = V_bias_max/50 #[V]
+V_bias_ofset = 0 #[V] offset
+delta_V_bias = V_bias_max/100 #[V]
 
 measure_average = 1 # number of the measurements per each bias Voltage for averaging
 time_sleep_measure = 0.05 # slee time in between measurements
 calibrate = False # Calibrate for the internal resistances of the measurement units
 
-Vgmax = 60 # Maximum gate voltage [V]
-Vgmin = -60 # Minimum gate voltage [V]
-deltaVg = 120 # Gate voltage steps [V]
+Vgmax = 75 # Maximum gate voltage [V]
+Vgmin = -75 # Minimum gate voltage [V]
+deltaVg = 25 # Gate voltage steps [V]
 
 
 gate_ramp_speed = 1 # Gate ramp speed [V/s], proposed: 0.5
@@ -61,8 +62,8 @@ S1h_dac = 1 #DAC number for gate voltage
 S3b_dac = 5  #DAC number for Voltage source
 
 # gains
-M1b_gain = 1e8  #V/A gain for current to voltage conversion, set on M1b unit
-M1b_postgain_switch = 1 #postgain switch [x100ac x1 x100dc], set on M1b unit
+M1b_gain = 1e6  #V/A gain for current to voltage conversion, set on M1b unit
+M1b_postgain_switch = 1#postgain switch [x100ac x1 x100dc], set on M1b unit
 S1h_gain = 45. #V/V gain for the applied gate, set on S1h
 S3b_range = 100e-6  #Full range of the applied current, set on S4c
 M1b_mode = 'Low-Rin' # 'Low-Noise' or 'Low-Rin'
@@ -73,7 +74,7 @@ M1b_total_gain = M1b_gain*M1b_postgain_switch
 
 ''' Check for errors '''
 EXIT = False
-if V_bias_max > S3b_range:
+if V_bias_max+V_bias_ofset > S3b_range:
     print ('Maximum bias voltage exceeds the range on S3b.')
     EXIT = True
 
@@ -88,9 +89,9 @@ if EXIT:
 ''' Initialize '''  
 
 if calibrate: 
-    prefix += '_with-calibration'
+    prefix += '_with-calib'
 else:
-    prefix += '_no-calibration'
+    prefix += '_no-calib'
 
 pygame.init()
 pygame.display.set_mode((100,100))
@@ -102,13 +103,13 @@ colnames = ['Vset (V)', 'Imeas (A)', 'Vgate (V)', 'T (mK)', 'Time (s)', 'Ileakag
 myfile = stlab.newfile(prefix, idstring, colnames, autoindex=True, mypath= path)
 
 
-Vglist = np.linspace(Vgmax, Vgmin, (Vgmax-Vgmin)/deltaVg+1)
+Vglist = np.append(np.linspace(Vgmax, Vgmin, (Vgmax-Vgmin)/deltaVg+1),np.linspace(Vgmin, Vgmax, (Vgmax-Vgmin)/deltaVg+1))
 if Vgmax == Vgmin:
     Vglist =[Vgmax]
 
 Vg_ini = Vglist[0]
 
-V_bias_list = np.linspace(V_bias_max, V_bias_min, (V_bias_max-V_bias_min)/delta_V_bias+1)
+V_bias_list = np.linspace(V_bias_max, V_bias_min, (V_bias_max-V_bias_min)/delta_V_bias+1)+V_bias_ofset
 
 END = False
 
@@ -185,7 +186,6 @@ last_time = time.time()
 ## Sweeping the gate
 r_max = 0
             
-plt.subplot(2,1,1)
 plt.plot(V_bias_list*coeff,(V_bias_list/R_int)*1e9, '--b', linewidth=0.3, alpha=0.8, label = 'R_int')
 plt.legend()             
 
@@ -283,26 +283,26 @@ for gate_count,Vg in enumerate(Vglist):
 
 
     if (Vgmax != Vgmin) and (not END):
-        plt.subplot(2,1,1)
+        # plt.subplot(2,1,1)
         plt.title(prefix)
-
-        plt.plot(V_bias_list*coeff,current_array*1e9, '--', marker='.', color=palette(gate_count), markersize = 0.5, linewidth=0.5, alpha=0.9, label='{:.0f}Vg'.format(Vg))
-        plt.legend()
+        plt.plot(V_bias_list*coeff,current_array*1e9+gate_count*0.2, '--', marker='.', color=palette(gate_count), markersize = 0.5, linewidth=0.5, alpha=0.9, label='{:.0f}Vg'.format(Vg))
+        # plt.legend()
         plt.ylabel('current [nA]')
-        plt.xlim(V_bias_min*coeff,V_bias_max*coeff)
+        # plt.xlim(V_bias_min*coeff,V_bias_max*coeff)
         
-        plt.subplot(2,1,2)
-        plt.plot((V_bias_array[1:]+delta_V_bias/2)*coeff,1e-3*np.diff(V_bias_array)/np.diff(current_array), '--', color=palette(gate_count), marker='.', markersize = 0.5, linewidth=0.5, alpha=0.9, label='{:.0f}Vg'.format(Vg))
-        plt.legend()             
-        # if calibrate: 
-        #     plt.ylim(0,1.1*r_max/1000)
+        # plt.subplot(2,1,2)
+        # plt.plot((V_bias_array[1:]+delta_V_bias/2)*coeff,1e-3*np.diff(V_bias_array)/np.diff(current_array), '--', color=palette(gate_count), marker='.', markersize = 0.5, linewidth=0.5, alpha=0.9, label='{:.0f}Vg'.format(Vg))
+        # plt.legend()             
+        # # if calibrate: 
+        # #     plt.ylim(0,1.1*r_max/1000)
         
-        plt.ylabel('dV/dI [k$\Omega$]')
+        # plt.ylabel('dV/dI [k$\Omega$]')
+        # plt.xlim(V_bias_min*coeff,V_bias_max*coeff)
         plt.xlabel('bias Voltage ['+unit+'V]')
-        plt.xlim(V_bias_min*coeff,V_bias_max*coeff)
+
 
         if not calibrate:
-            plt.title("internal resisatnce: {:.1f} [$k\Omega$]".format(1e-3*R_int))
+            plt.title("internal resistance: {:.1f} [$k\Omega$]".format(1e-3*R_int))
 
         if overshoot:
                 plt.title("overshoot!")

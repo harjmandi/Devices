@@ -42,15 +42,15 @@ def R_int(mode, gain): # This function estimates the expected internal resistanc
 
 
 ''' input ''' 
-prefix = 'F18_e6_FE_IVVI_VBias'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-02-11 measurements/'
+prefix = 'F18_e7_FE_IVVI_VBias_250mK_'
+path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-03-04 measurements with LP filters/'
 
 V_bias = 100 # bias Voltage  [uV], The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
 # 100 uV at Dirac point (~1kOhm) corresponds to 100uV/(1+3 kOhms) = 25 nA.
 
-Vgmax = 2 # Maximum gate voltage [V]
+Vgmax = 65 # Maximum gate voltage [V]
 Vgmin = -Vgmax # Minimum gate voltage [V]
-deltaVg = 0.2 # Gate voltage steps [V]
+deltaVg = 1 # Gate voltage steps [V]
 gate_ramp_speed = 0.5 # Gate ramp speed [V/s], proposed: 0.1
 time_sleep = 0.5 #sleep time to stablize the gate [s], proposed: 2
 measure_leakage = False
@@ -62,7 +62,7 @@ S1h_dac = 1 #DAC number for gate voltage
 S3b_dac = 5  #DAC number for Voltage source
 
 # gains
-M1b_gain = 1e8  #V/A gain for current to voltage conversion, set on M1b unit
+M1b_gain = 1e9  #V/A gain for current to voltage conversion, set on M1b unit
 M1b_postgain_switch = 1 #postgain switch [x100ac x1 x100dc], set on M1b unit
 M1b_mode = 'Low-Noise' # 'Low-Noise' or 'Low-Rin'
 
@@ -74,11 +74,11 @@ M1b_total_gain = M1b_gain*M1b_postgain_switch
 prefix =prefix+str(V_bias)+'uV'
 V_bias *=1e-6
 
-initial_calibration = False # initial calibration to estimate the internal resisatnces of the components. 
+initial_calibration = True # initial calibration to estimate the internal resisatnces of the components. 
 # Alternatively the internal resistance can be calculated using the formula provided http://qtwork.tudelft.nl/~schouten/ivvi/doc-mod/docm1b.htm
 
 # Temperature
-T = 0.249
+T = 75
 
 
 ''' Initialize '''  
@@ -108,22 +108,31 @@ ivvi.RampAllZero(tt=2., steps = 10)
 
 vmeas = stlab.adi(addr='TCPIP::192.168.1.105::INSTR') #for measuring the voltage accross the sample
 
+
 if measure_leakage:
-    v_gateleakage = stlab.adi(addr='TCPIP::192.168.1.162::INSTR') #for measuring the leakage current
+    v_gateleakage = stlab.adi(addr='TCPIP::192.254.89.117::INSTR') #for measuring the leakage current
 I_leakage = 0
 
 ## Estimating for the internal resistances
-if initial_calibration: 
+if initial_calibration:
+    I_cal_p = 0
+    I_cal_n = 0
     print ('#### Calibration for the internal resistances ####')
     input ('Short the S3b_output and M1b_input (pin #4), Press Enter to continue...')
-
     ivvi.RampVoltage(S3b_dac,V_bias/S3b_range*1e3,tt=0.5, steps = 5) ##ramping this voltage in 20seconds
-    I_cal_p = float(vmeas.query('READ?')) / M1b_total_gain
+    
+    for cnt in range (measure_iteration):
+        I_cal_p += float(vmeas.query('READ?')) / M1b_total_gain
+
+    I_cal_p = I_cal_p/measure_iteration
 
     ivvi.RampVoltage(S3b_dac,-V_bias/S3b_range*1e3,tt=1, steps = 5) ##ramping this voltage in 20seconds
-    
-    I_cal_n = float(vmeas.query('READ?')) / M1b_total_gain
 
+    for cnt in range (measure_iteration):
+        I_cal_n += float(vmeas.query('READ?')) / M1b_total_gain
+
+    I_cal_n = I_cal_n/measure_iteration
+    
     R_cal = 2*V_bias/(I_cal_p-I_cal_n)
 
     print ('V_bias:',V_bias)
@@ -140,6 +149,8 @@ if initial_calibration:
 
 else: 
     R_cal = R_int(M1b_mode, M1b_gain)
+    ivvi.RampVoltage(S3b_dac,-V_bias/S3b_range*1e3,tt=1, steps = 5) ##ramping this voltage in 20seconds
+
 
 
 ## Ramping up the gate
@@ -152,7 +163,6 @@ time.sleep(5*time_sleep)
 
 ## Start the measurement
 p = -1 #polarity of the bias voltage
-
 
 
 last_time = time.time()
@@ -172,8 +182,8 @@ for count,Vg in enumerate(Vglist):
     I_p1 = 0
     I_p2 = 0
     
-    ivvi.RampVoltage(S3b_dac, V_bias/S3b_range*1e3,tt=0.5, steps = 3)  #biasing at reverse Voltage   
-    time.sleep(10) 
+    # ivvi.RampVoltage(S3b_dac, V_bias/S3b_range*1e3,tt=0.5, steps = 3)  #biasing at reverse Voltage   
+    # time.sleep(10) 
 
 
     for cnt in range (measure_iteration):
@@ -184,20 +194,20 @@ for count,Vg in enumerate(Vglist):
     I_p1 = I_p1/measure_iteration
     
 
-
-    ivvi.RampVoltage(S3b_dac, -V_bias/S3b_range*1e3,tt=0.5, steps = 3)  #biasing at reverse Voltage   
+    p*=-1
+    ivvi.RampVoltage(S3b_dac, p*V_bias/S3b_range*1e3,tt=0.5, steps = 3)  #biasing at reverse Voltage   
     
-    time.sleep(10) 
+    time.sleep(1) 
 
     for cnt in range (measure_iteration):
-        I_p2 = float(vmeas.query('READ?')) / M1b_total_gain
+        I_p2 += float(vmeas.query('READ?')) / M1b_total_gain
         time.sleep(0.1)
 
     I_p2 = I_p2/measure_iteration
 
 
-    # if p == -1: 
-    #     I_p1, I_p2 = I_p2, I_p1
+    if p == -1: 
+        I_p1, I_p2 = I_p2, I_p1
 
     print('V_bias=', V_bias)
     print ('I_p1 = ', I_p1)
@@ -207,7 +217,6 @@ for count,Vg in enumerate(Vglist):
     R = (2*V_bias/np.absolute(I_p1-I_p2))-R_cal
     print ('R = ', R)
     print ('#####################################')
-    p*=-1
 
     if measure_leakage:
         I_leakage = float(v_gateleakage.query('READ?'))*1e3 #leakage current [nA]
