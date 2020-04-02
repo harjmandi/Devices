@@ -1,3 +1,5 @@
+# This program starts by measurign the internal resisatnce of the lock-in. The subtracts it from the later measurements. 
+
 
 import numpy as np
 import zhinst.utils
@@ -21,20 +23,28 @@ device_id = 'dev352'
 measure_amplitude = 0.1 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 77 #[Hz]
+measure_frequency = 50e6 #[Hz]
 demodulation_time_constant = 0.1
-deamodulation_duration = 0.18
+deamodulation_duration = 0.2
+
+calibration_duration = 10 
 
 calibration_factor = 1 # to compensate the shift in resistance measurement
 shift = 0 
-bias_resistor = 1e6
 
-in_range = 10e-3 
-out_range = 1000e-3 
-diff = True 
+
+in_range = 100e-3 
+out_range = 100e-3 
+diff = False 
 add = False 
 offset = 0 
 ac = False
+
+
+
+bias_resistor = 1e6
+
+
 
 
 pygame.init()
@@ -58,7 +68,51 @@ INI_time = time.time()
 Time=np.array([])
 plt_resistance=np.array([])
 plt_phase=np.array([])
+plt_y = np.array([])
 END = False
+
+# measuring internal resisatnce
+print('Calibration for internal resistances:')
+input('Directly connect the output of the bias resistor to the Signal input port, press ENTER to continue ...')
+t_ini = time.time()
+t = 0
+count = 0
+X = 0
+Y = 0
+
+while t - t_ini < calibration_duration:
+	measured = R_measure(device_id = 'dev352', 
+			amplitude = measure_amplitude, 
+			out_channel = measure_output_channnel, 
+			in_channel = measure_input_channnel, 
+			time_constant = demodulation_time_constant, 
+			frequency = measure_frequency, 
+			poll_length = deamodulation_duration, 
+			device = device, 
+			daq = daq, 
+			out_mixer_channel = out_mixer_channel, 
+			bias_resistor = bias_resistor, 
+			in_range = in_range, 
+			out_range = out_range, 
+			diff = diff, 
+			add = add, 
+			offset = offset, 
+			ac = ac)
+
+	X+= measured[4]
+	Y+= measured[5]
+	count+= 1
+	t = time.time()
+
+
+X = X/count
+Y = Y/count
+
+print ('Calibration Finished with average X = {:.2f}uV and Y = {:.2f}uV'.format(1e6*X, 1e6*Y))
+h = input ('Connect to the device, press Enter to continue or "e" to exit.' )
+
+if h == "e":
+    sys.exit(0)
 
 while (not END):
 
@@ -82,27 +136,38 @@ while (not END):
 		offset = offset, 
 		ac = ac)
 
-	measured[0] = calibration_factor * np.abs(measured[0]) + shift
-	
+	 
 
-	plt_resistance = np.append(plt_resistance,measured[0])
-	plt_phase = np.append(plt_phase,measured[2])
+	plt_resistance = np.append(plt_resistance,measured_R)
+	plt_y = np.append(plt_y,measured_y)
+	plt_phase = np.append(plt_phase,measured_phi)
+	
 	Time = np.append(Time,mytime)
 
 	plt.rcParams["figure.figsize"] = [12,6]
 
 	
-	plt.subplot(2, 1, 1)
+	plt.subplot(3, 1, 1)
 	plt.plot(Time,plt_resistance*1e-3, '--r',marker='o')
 
 	plt.ylabel('Resistance ($k\Omega$)')
-	plt.yscale('log')
+	# plt.yscale('log')
 	plt.title("Resistance = %4.2f k$\Omega$" %(measured[0]*1e-3))
-
 	if mytime > 10:
 		plt.xlim(mytime-10, mytime)
 	
-	plt.subplot(2, 1, 2)
+	
+	plt.subplot(3, 1, 2)
+	plt.plot(Time,plt_y*1e-3, '--r',marker='o')
+
+	plt.ylabel('Resistance ($k\Omega$)')
+	# plt.yscale('log')
+	plt.title("Resistance = %4.2f k$\Omega$" %(measured[0]*1e-3))
+	if mytime > 10:
+		plt.xlim(mytime-10, mytime)
+	
+
+	plt.subplot(3, 1, 3)
 	plt.plot(Time,plt_phase, '--r', marker='o')
 	plt.ylabel('phase ()')
 	plt.xlabel('time (s)')

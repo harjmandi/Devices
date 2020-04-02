@@ -42,19 +42,19 @@ def R_int(mode, gain): # This function estimates the expected internal resistanc
 
 
 ''' input ''' 
-prefix = 'F18_e7_FE_IVVI_VBias_250mK_'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F18 2020-03-04 measurements with LP filters/'
+prefix = 'F17_C4_1-2_FE_VBias_RT_'
+path = 'D:/measurement_data/Hadi\F- Multiterminal graphene JJ/F17 2020-03-09 measurements with LP filters/'
 
-V_bias = 100 # bias Voltage  [uV], The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
+V_bias = 1000 # bias Voltage  [uV], The bias voltage should be chosen considering the total resistance of the sample + source and measure units (normally < 3kOhm)
 # 100 uV at Dirac point (~1kOhm) corresponds to 100uV/(1+3 kOhms) = 25 nA.
 
 Vgmax = 65 # Maximum gate voltage [V]
 Vgmin = -Vgmax # Minimum gate voltage [V]
-deltaVg = 1 # Gate voltage steps [V]
+deltaVg = 0.5 # Gate voltage steps [V]
 gate_ramp_speed = 0.5 # Gate ramp speed [V/s], proposed: 0.1
 time_sleep = 0.5 #sleep time to stablize the gate [s], proposed: 2
 measure_leakage = False
-measure_iteration = 2 #measure iteration for averaging 
+measure_iteration = 1 #measure iteration for averaging 
 
 
 # DACs
@@ -62,19 +62,19 @@ S1h_dac = 1 #DAC number for gate voltage
 S3b_dac = 5  #DAC number for Voltage source
 
 # gains
-M1b_gain = 1e9  #V/A gain for current to voltage conversion, set on M1b unit
+M1b_gain = 1e6  #V/A gain for current to voltage conversion, set on M1b unit
 M1b_postgain_switch = 1 #postgain switch [x100ac x1 x100dc], set on M1b unit
 M1b_mode = 'Low-Noise' # 'Low-Noise' or 'Low-Rin'
 
 S1h_gain = 45. #V/V gain for the applied gate, set on S1h
-S3b_range = 100e-6  #Full range of the applied current, set on S4c
+S3b_range = 1e-3  #Full range of the applied current, set on S4c
 
 
 M1b_total_gain = M1b_gain*M1b_postgain_switch
 prefix =prefix+str(V_bias)+'uV'
 V_bias *=1e-6
 
-initial_calibration = True # initial calibration to estimate the internal resisatnces of the components. 
+initial_calibration = False # initial calibration to estimate the internal resisatnces of the components. 
 # Alternatively the internal resistance can be calculated using the formula provided http://qtwork.tudelft.nl/~schouten/ivvi/doc-mod/docm1b.htm
 
 # Temperature

@@ -5,7 +5,7 @@ import numpy as np
 import zhinst.utils
 
 
-def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, frequency, poll_length, device, daq, out_mixer_channel, bias_resistor, in_range, out_range, diff, calibration_factor = 1.45, add = False, offset =0, ac = False):
+def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, frequency, poll_length, device, daq, out_mixer_channel, bias_resistor, in_range, out_range, diff, add = False, offset =0, ac = False):
 	"""Run the example: Connect to the device specified by device_id and obtain
 	demodulator data using ziDAQServer's blocking (synchronous) poll() command.
 
@@ -30,6 +30,7 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 
 	if out_range not in out_range_list:
 		print('### Unknonw output range for HF2LI ###')
+		print('out range = ', out_range)
 	else:
 
 		exp_setting = [['/%s/sigins/%d/ac'             % (device, in_channel), ac],
@@ -119,13 +120,19 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 			(poll_length, tol_percent)
 
 
-		measured_R = calibration_factor*np.mean(sample['x'])*bias_resistor/amplitude
+		measured_R = np.mean(sample['x'])*bias_resistor/amplitude
 		measured_X = np.mean(np.abs(sample['x'] + 1j*sample['y']))*bias_resistor/amplitude
-		measured_phi = np.mean(np.angle(sample['x'] + 1j*sample['y']))
+		# measured_phi = np.mean(sample['phase'])
+
+		# measured_phi = np.remainder(np.mean(np.angle(sample['x'] + 1j*sample['y'])),360)
+		measured_phi = np.remainder(np.mean(np.rad2deg(np.angle(sample['x'] + 1j*sample['y']))),360)
 		
+		measured_x = np.mean(sample['x'])
+		measured_y = np.mean(sample['y'])
+
 		measured_duration = dt_seconds
 		
 		#measured = {'resistance':measured_R, 'angle':measured_phi, 'duration':measured_duration}
-		measured = [measured_R, measured_X, measured_phi, measured_duration]
+		measured = [measured_R, measured_X, measured_phi, measured_duration, measured_x, measured_y]
 
 		return measured
