@@ -25,14 +25,9 @@ import numpy as np
 import time
 import stlab
 import stlabutils
-from stlab.devices.RS_ZND import RS_ZND
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.pyplot as plt
-from matplotlib import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import pygame, sys
 from pygame.locals import *
-from matplotlib import cm
 from array import *
 from stlab.devices.Cryocon_44C import Cryocon_44C
 
@@ -42,24 +37,34 @@ from stlab.devices.Cryocon_44C import Cryocon_44C
 
 #definitions
 
-prefix = 'C26_D3_mapping1_'
-path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-02-06 measurements/'
+prefix = 'C26_UL_TempSweep_'
+title = 'Vg = 3V, Power = 3dBm'
+path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-04-01 measurements'
 
-gate_voltage = 0
-measure = 'OnePort' # 'OnePort' or 'TwoPort'
-tdelay_measure = 1 #time between resonance measurements
-tdelay_idle = 10 # time between temperature measurements
+gate_voltage = 0 #This is not correct: I set the voltage directly on the SMU.
+measure = 'TwoPort' # 'OnePort' or 'TwoPort'
+tdelay_measure = 0.5 #time between resonance measurements
+tdelay_idle = 0.5 # time between temperature measurements
 
-low_T = 3
-hight_T = 18
+''' EXTRA paramters (set manually on the VNA)
+start frequency: 8 GHz
+stop frequency: 10 GHz
+resolution: 201 points
+IF bandwidth : 100 Hz
+'''
+
+low_T = 3.25
+hight_T = 12
+
+safe_gate_current = 5e-3 # [A], safe current leakage limit, above this limit S1h unit gives an error. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
+
 
 # output setting
 save_data =True
 pygame.init()
 pygame.display.set_mode((100,100))
 STOP = False
-monitor_ratio = 5 #shows 1 out of "monitor_ratio" spectrums
-adjust_phase = False
+monitor_ratio = 3 #shows 1 out of "monitor_ratio" spectrums
 
 font = {'family': 'serif',
         'color':  'darkred',
@@ -68,6 +73,7 @@ font = {'family': 'serif',
         }
 
 ##########################################################
+
 ''' Initializing the devices '''
 
 if gate_voltage != 0:
@@ -138,26 +144,10 @@ while (not STOP):
             S_phase = phase_data
 
 
-            if adjust_phase:
-                plt.plot(data['Frequency (Hz)'],phase_data)
-                plt.show()
-
-                Min = float(input('please enter min frequecy range for fitting the phase [GHz]:'))
-                Max = float(input('please enter max frequecy range for fitting the phase [GHz]:'))
-
-                index_1 = (np.abs(data['Frequency (Hz)'] - 1e9*Min)).argmin()
-                index_2 = (np.abs(data['Frequency (Hz)'] - 1e9*Max)).argmin()
-
-                z = np.polyfit(data['Frequency (Hz)'][index_1:index_2], (phase_data[index_1:index_2]), 1)
-                adjusted_phase = (phase_data-z[0]*data['Frequency (Hz)'])*180/np.pi
-                adjusted_phase -= np.amin(adjusted_phase)
-            else:
-                adjusted_phase = phase_data
-
         else:
 
             S_amp = np.array(np.vstack((S_amp,amp_data)))
-            S_phase = np.array(np.vstack((S_phase,adjusted_phase)))
+            S_phase = np.array(np.vstack((S_phase,)))
 
 
 
@@ -165,19 +155,23 @@ while (not STOP):
 
             if (count-1)//monitor_ratio == (count-1)/monitor_ratio:
                 plt.subplot(3, 1, 1)
-                plt.plot(data['Frequency (Hz)'],amp_data)
+                plt.plot(data['Frequency (Hz)']*1e-9,amp_data)
                 plt.ylabel('S11dB (dB)')
-                # plt.xlim(np.minimum(data['Frequency (Hz)']),np.maximum(data['Frequency (Hz)']))
+                plt.title(title)
+                plt.xlim(np.min(data['Frequency (Hz)'])*1e-9,np.max(data['Frequency (Hz)'])*1e-9)
+
 
                 plt.subplot(3, 1, 2)
-                plt.plot(data['Frequency (Hz)'],adjusted_phase*180/np.pi)
+                plt.plot(data['Frequency (Hz)']*1e-9,phase_data*180/np.pi)
                 plt.ylabel('Phase (°)')
-                # plt.xlim(np.minimum(data['Frequency (Hz)']),np.maximum(data['Frequency (Hz)']))
+                plt.xlim(np.min(data['Frequency (Hz)'])*1e-9,np.max(data['Frequency (Hz)'])*1e-9)
 
 
             plt.subplot(3, 1, 3)
             plt.contourf(data['Frequency (Hz)'],Temp,S_amp)
             plt.ylabel('T (K)')
+            plt.xlabel('Frequency (GHz)')
+
 
 
 
@@ -237,6 +231,10 @@ if save_data:
     plt.savefig(os.path.dirname(Data.name)+'\\'+prefix+'_Temp')
     Data.close()
 
+
+if gate_voltage != 0:
+    gate_dev.RampVoltage(0,tt=5, steps = 20)
+    gate_dev.close()
 
 
 
