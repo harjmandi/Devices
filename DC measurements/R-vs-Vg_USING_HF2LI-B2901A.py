@@ -33,35 +33,41 @@ import math
 ''' Definitions'''
 
 # definitions
-tempdev = -1
-prefix = 'F17_FE_C4-1to234_2probe'
-path = 'D:\\measurement_data\\Hadi\\F- Multiterminal graphene JJ\\F17 2020-01-22 measurements/'
+tempdev = 3.4
+prefix = 'C26_FE_UL_Rs100_'
+path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-04-10 measurements'
 
 time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
 ramp_speed = 500 # the safe speed for ramping the gate voltage [mV/s]
-target_gate = 70
+target_gate = 5
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 300
-safe_gate_current = 2.5e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
+gate_points = 200
+safe_gate_current = 5e-3 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
 
 # HF2LI settings
-measure_amplitude = 0.1 #measurement amplitude [V]
+measure_amplitude = 10 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 2437 #[Hz]
-demodulation_time_constant = 0.45
-deamodulation_duration = 1
+measure_frequency = 20.3e6 #[Hz]
+demodulation_time_constant = 0.1
+deamodulation_duration = 0.18
 
 
-bias_resistor = 1e8
+bias_resistor = 100
 
-# Calibration parameters; experimentally achieved to adjst the resistance reading 
+# Calibration parameters; experimentally achieved to adjst the resistance reading
 	# CASE 1: bias resistance of 1M and demodulation_time_constant = 0.1 =>> calibration_factor = 1.45 and shift = 0
 	# CASE 2: bias resistance of 10M and demodulation_time_constant = 0.45 =>> calibration_factor = 0.65 and shift = 400
 
 
-calibration_factor = 0.65 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
-shift = 400 
+calibration_factor = 1 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
+shift = 0
+in_range = 2
+out_range = 10
+diff = True
+add = False
+offset = 0
+ac = False
 
 # output setting
 do_plot = True
@@ -101,7 +107,8 @@ count = 0 # couter of step numbers
 leakage_current = 0
 
 if save_data:
-	colnames = ['step ()','gate voltage (V)','leakage current (nA)','Resistance (k ohm)','phase ()', 'demodulation duration (s)']
+	colnames = ['step ()','gate voltage (V)','leakage current (nA)','Resistance (ohm)', 'Impedence (ohm)', 'phase ()', 'demodulation duration (s)', 'X (V)', 'Y (V)']
+
 	my_file_2= stlab.newfile(prefix,'_',autoindex=True,colnames=colnames, mypath= path)
 
 ramp_time = np.abs(np.floor(shift_voltage/ramp_speed))
@@ -112,13 +119,33 @@ gate_voltage_step = pattern['ramp_pattern'][1]-pattern['ramp_pattern'][0]
 ramp_time = 0.5
 plt_Vg=np.array([])
 plt_resistance=np.array([])
-plt_leak_curr=np.array([])
+plt_phase=np.array([])
 
 
 END = False
 
+for i in range (3):
+	measured = R_measure(device_id = 'dev352',
+		amplitude = measure_amplitude,
+		out_channel = measure_output_channnel,
+		in_channel = measure_input_channnel,
+		time_constant = demodulation_time_constant,
+		frequency = measure_frequency,
+		poll_length = deamodulation_duration,
+		device = device,
+		daq = daq,
+		out_mixer_channel = out_mixer_channel,
+		bias_resistor = bias_resistor,
+		in_range = in_range,
+		out_range = out_range,
+		diff = diff,
+		add = add,
+		offset = offset,
+		ac = ac)
+
 for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the gate voltage
 
+	gate_voltage *=1
 	for event in pygame.event.get():
 		if event.type == QUIT:sys.exit()
 		elif event.type == KEYDOWN and event.dict['key'] == 101:
@@ -146,26 +173,30 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 	# time.sleep(time_step)
 
-	measured = R_measure(device_id = 'dev352', 
-		amplitude = measure_amplitude, 
-		out_channel = measure_output_channnel, 
-		in_channel = measure_input_channnel, 
-		time_constant = demodulation_time_constant, 
-		frequency = measure_frequency, 
-		poll_length = deamodulation_duration, 
-		device = device, 
-		daq = daq, 
-		out_mixer_channel = out_mixer_channel, 
-		bias_resistor = bias_resistor, 
-		in_range = 4e-3, 
-		out_range = 100e-3, 
-		diff = False, 
-		calibration_factor = 1.45, 
-		add = False, 
-		offset = 0, 
-		ac = False)
+	measured = R_measure(device_id = 'dev352',
+		amplitude = measure_amplitude,
+		out_channel = measure_output_channnel,
+		in_channel = measure_input_channnel,
+		time_constant = demodulation_time_constant,
+		frequency = measure_frequency,
+		poll_length = deamodulation_duration,
+		device = device,
+		daq = daq,
+		out_mixer_channel = out_mixer_channel,
+		bias_resistor = bias_resistor,
+		in_range = in_range,
+		out_range = out_range,
+		diff = diff,
+		add = add,
+		offset = offset,
+		ac = ac)
 
-	measured[0] = calibration_factor * measured[0] + shift
+	# measured[0] = calibration_factor * np.abs(measured[0]) + shift
+
+	Vin = np.abs(measured[4] + 1j*measured[5])
+	r = Vin * bias_resistor/(measure_amplitude - Vin) # thie relation is valid when the phase is close to zero.
+	measured [0] = r
+
 	line = [count,gate_voltage, leakage_current] + measured
 
 	if save_data:
@@ -174,12 +205,15 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 
 
 	print('LEAKAGE CURRENT: {:6.4f}'.format(1e9*leakage_current), 'nA')
-	print('RESISTANCE: {:6.2f}'.format(measured[0]), 'Ohms')
+	# print('RESISTANCE: {:6.2f}'.format(measured[0]), 'Ohms')
+	print('RESISTANCE: {:6.2f}'.format(r), 'Ohms')
+
 	print('PHASE {:4.2f}'.format(measured[1]))
 
 	plt_Vg = np.append(plt_Vg,gate_voltage)
-	plt_resistance = np.append(plt_resistance,measured[0])
-	plt_leak_curr = np.append(plt_leak_curr,leakage_current)
+	plt_resistance = np.append(plt_resistance,r)
+	plt_phase = np.append(plt_phase,measured[2])
+
 
 	plt.rcParams["figure.figsize"] = [16,9]
 	plt.subplot(2, 1, 1)
@@ -187,12 +221,12 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 	# plt.yscale ('log')
 	plt.ylabel('Resistance ($\Omega$)')
 	# plt.ylim(1, 1000)
-	plt.title(prefix)
+	plt.title(prefix+ " f = {:.1f}MHz, V = {:.1f}, R(bias) = {:.2f} $k\Omega$, ".format(measure_frequency/1e6, measure_amplitude, bias_resistor/1e3))
 
 
 	plt.subplot(2, 1, 2)
-	plt.plot(plt_Vg,1e9*plt_leak_curr, '--b', marker='.',markersize = 1, linewidth= 0.2)
-	plt.ylabel('Leakage Current (nA)')
+	plt.plot(plt_Vg,plt_phase, '--b', marker='.',markersize = 1, linewidth= 0.2)
+	plt.ylabel('Phase ($\degree$)')
 	plt.xlabel('Gate Voltage (V)')
 	plt.title("Resistance = %4.2f k$\Omega$, Leackage Current = %4.2f nA" %(measured[0], 1e9*leakage_current))
 
@@ -203,7 +237,7 @@ print('RAMPING FINISHED')
 
 gate_dev.RampVoltage(0,tt=ramp_time*10) # to safely return back the gate voltage
 
- 
+
 zhinst.utils.disable_everything(daq, device)
 gate_dev.SetOutputOff()
 

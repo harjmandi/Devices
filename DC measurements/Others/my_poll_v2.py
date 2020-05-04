@@ -16,9 +16,9 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 	Raises:
 	  RuntimeError: If the device is not "discoverable" from the API.
 	"""
-
+	
 	''' Initial definitions'''
-
+  
 
 
 	demod_index = 0
@@ -61,7 +61,7 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		daq.unsubscribe('*')
 
 		# Wait for the demodulator filter to settle.
-		time.sleep(2.5*time_constant)
+		time.sleep(3*time_constant)
 
 		# Perform a global synchronisation between the device and the data server:
 		# Ensure that 1. the settings have taken effect on the device before issuing
@@ -78,14 +78,14 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		# accumulated during the specified poll_length, but also for data
 		# accumulated since the subscribe() or the previous poll.
 		#sleep_length = 1.0
-
+		
 		# For demonstration only: We could, for example, be processing the data
 		# returned from a previous poll().
 		#time.sleep(sleep_length)
 
 		# Poll the subscribed data from the data server. Poll will block and record
 		# for poll_length seconds.
-
+		
 		poll_timeout = 500  # [ms]
 		poll_flags = 0
 		poll_return_flat_dict = True
@@ -111,9 +111,9 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		# ... and use it to convert sample timestamp ticks to seconds:
 		dt_seconds = (sample['timestamp'][-1] - sample['timestamp'][0])/clockbase
 		print("poll() returned {:.3f} seconds of demodulator data.".format(dt_seconds))
-
+		
 		tol_percent = 50
-
+		
 		assert (dt_seconds - poll_length)/poll_length*100 < tol_percent, \
 			"Duration of demod data returned by poll() (%.3f s) differs " % dt_seconds + \
 			"from the expected duration (%.3f s) by more than %0.2f %%." % \
@@ -125,14 +125,13 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		# measured_phi = np.mean(sample['phase'])
 
 		# measured_phi = np.remainder(np.mean(np.angle(sample['x'] + 1j*sample['y'])),360)
-		# measured_phi = np.remainder(np.mean(np.rad2deg(np.angle(sample['x'] + 1j*sample['y']))),360)
-		measured_phi = np.mean(np.rad2deg(np.angle(sample['x'] + 1j*sample['y'])))
-
+		measured_phi = np.remainder(np.mean(np.rad2deg(np.angle(sample['x'] + 1j*sample['y']))),360)
+		
 		measured_x = np.mean(sample['x'])
 		measured_y = np.mean(sample['y'])
 
 		measured_duration = dt_seconds
-
+		
 		#measured = {'resistance':measured_R, 'angle':measured_phi, 'duration':measured_duration}
 		measured = [measured_R, measured_X, measured_phi, measured_duration, measured_x, measured_y]
 
