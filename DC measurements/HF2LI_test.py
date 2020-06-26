@@ -18,19 +18,19 @@ from my_poll_v2 import R_measure as R_measure
 device_id = 'dev352'
 
 # HF2LI settings
-measure_amplitude = 0.1 #measurement amplitude [V]
+measure_amplitude = 2e-3 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 35.5e6 #[Hz]
-demodulation_time_constant = 0.1
-deamodulation_duration = 0.18
+measure_frequency = 169 #[Hz]
+demodulation_time_constant = 0.02 #=real filtering time constant is 10 times longer!
+poll_length = 1
 
-calibration_factor = 1 # to compensate the shift in resistance measurement
+calibration_factor = 1.45 # to ceompensate the shift in resistance measurement
 shift = 0
-bias_resistor = 1e6
+bias_resistor = 20e6
 
-in_range = 200e-3
-out_range = 1
+in_range = 10e-3
+out_range = 10e-3
 diff = True
 add = False
 offset = 0
@@ -59,6 +59,7 @@ Time=np.array([])
 plt_resistance=np.array([])
 plt_phase=np.array([])
 END = False
+set_settings = True
 
 while (not END):
 
@@ -70,7 +71,7 @@ while (not END):
         in_channel = measure_input_channnel,
         time_constant = demodulation_time_constant,
         frequency = measure_frequency,
-        poll_length = deamodulation_duration,
+        poll_length = poll_length,
         device = device,
         daq = daq,
         out_mixer_channel = out_mixer_channel,
@@ -80,11 +81,13 @@ while (not END):
         diff = diff,
         add = add,
         offset = offset,
-        ac = ac)
+        ac = ac,
+        set_settings = set_settings)
 
-    # measured[0] = calibration_factor * np.abs(measured[0]) + shift
-    Vin = np.abs(measured[4] + 1j*measured[5])
-    measured [0] = Vin
+    set_settings = False
+    measured[0] = calibration_factor * np.abs(measured[0]) + shift
+    # Vin = np.abs(measured[4] + 1j*measured[5])
+    # measured [0] = Vin
 
     plt_resistance = np.append(plt_resistance,measured[0])
     plt_phase = np.append(plt_phase,measured[2])

@@ -37,25 +37,25 @@ from stlab.devices.Keysight_B2901A import Keysight_B2901A
 
 #definitions
 title = 'C26_UL'
-path = 'D:/measurement_data_4KDIY/Hadi/C26 2020-03-18 measurements/UL/'
+path = 'D:/measurement_data_4KDIY/Hadi/C26 2020-04-26 measurements/'
 figures_path = path+'All_Results'
 
 time_step = 1#20 #time step between each gate voltage steps, to stablize the gate
 ramp_spead = 10 # the safe spead for ramping the gate voltage [mV/s]
 target_gate = 30 #
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 75
-monitor_ratio = 8 #shows 1 out of "monitor_ratio" spectrums
+gate_points = 60
+monitor_ratio = 4 #shows 1 out of "monitor_ratio" spectrums
 safe_gate_current = 5e-3 # [A], safe current leakage limit, above this limit S1h unit gives an error. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
 
 Start_Freq = 3.5  # start grequency [GHz]
-Stop_Freq = 50 # stop frequency [GHz] maximum 8.5GHZ for ZND
-Freq_Windows = 93
-Frequency = np.linspace(Start_Freq, Stop_Freq, Freq_Windows)
+Stop_Freq = 11 # stop frequency [GHz] maximum 8.5GHZ for ZND
+Freq_Windows = 3
+Frequency = np.linspace(Start_Freq, Stop_Freq, Freq_Windows+1)
 
 freq_points = 1001 # frequency sweep points
 power = 0 #sweep power [dB] range: -45 to 3 dB
-measure = 'OnePort' # 'OnePort' or 'TwoPort'
+measure = 'TwoPort' # 'OnePort' or 'TwoPort'
 averaging  = 1
 
 
@@ -65,7 +65,7 @@ save_data =True
 pygame.init()
 pygame.display.set_mode((100,100))
 STOP = False
-temp = 3.5 # read it manually
+temp = 12.3 # read it manually
 
 prefix = title+'_GateSweep'
 

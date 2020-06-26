@@ -5,7 +5,8 @@ import numpy as np
 import zhinst.utils
 
 
-def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, frequency, poll_length, device, daq, out_mixer_channel, bias_resistor, in_range, out_range, diff, add = False, offset =0, ac = False):
+def R_measure(device_id, amplitude, out_channel, in_channel, poll_length,
+	device, daq, out_mixer_channel, bias_resistor, in_range, out_range, diff, frequency = 169, BW = 50e-3, filter_order = 2, demod_rate = 7, add = False, offset =0, ac = False, initialize = False):
 	"""Run the example: Connect to the device specified by device_id and obtain
 	demodulator data using ziDAQServer's blocking (synchronous) poll() command.
 
@@ -23,10 +24,10 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 
 	demod_index = 0
 	osc_index = 0
-	demod_rate = 1e3
 	in_channel-=1
 	out_channel-=1
 	out_range_list = [10e-3,100e-3,1,10]
+	time_constant = 0.1/BW
 
 	if out_range not in out_range_list:
 		print('### Unknonw output range for HF2LI ###')
@@ -34,14 +35,14 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 	else:
 
 		exp_setting = [['/%s/sigins/%d/ac'             % (device, in_channel), ac],
-					   ['/%s/sigins/%d/range'          % (device, in_channel), in_range],
+					   # ['/%s/sigins/%d/range'          % (device, in_channel), in_range],
 					   ['/%s/sigins/%d/diff'          % (device, in_channel), diff],
 
 
 					   ['/%s/demods/%d/enable'         % (device, demod_index), 1],
 					   ['/%s/demods/%d/rate'           % (device, demod_index), demod_rate],
 					   ['/%s/demods/%d/adcselect'      % (device, demod_index), in_channel],
-					   ['/%s/demods/%d/order'          % (device, demod_index), 4],
+					   ['/%s/demods/%d/order'          % (device, demod_index), filter_order],
 					   ['/%s/demods/%d/timeconstant'   % (device, demod_index), time_constant],
 					   ['/%s/demods/%d/oscselect'      % (device, demod_index), osc_index],
 					   ['/%s/demods/%d/harmonic'       % (device, demod_index), 1],
@@ -55,13 +56,15 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 					   ['/%s/sigouts/%d/amplitudes/%d' % (device, out_channel, out_mixer_channel), amplitude/out_range],
 					   ['/%s/sigouts/%d/offset' % (device, out_channel), offset/out_range]]
 
-		daq.set(exp_setting)
+		if initialize: daq.set(exp_setting)
+
 
 		# Unsubscribe any streaming data.
-		daq.unsubscribe('*')
-
+		# print(daq.unsubscribe)
+		# daq.unsubscribe('*')
+		# time.sleep(5)
 		# Wait for the demodulator filter to settle.
-		time.sleep(2.5*time_constant)
+		# time.sleep(1.2*time_constant)
 
 		# Perform a global synchronisation between the device and the data server:
 		# Ensure that 1. the settings have taken effect on the device before issuing
@@ -71,17 +74,18 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 
 		# Subscribe to the demodulator's sample node path.
 		path = '/%s/demods/%d/sample' % (device, demod_index)
+
 		daq.subscribe(path)
 
 		# Sleep for demonstration purposes: Allow data to accumulate in the data
 		# server's buffers for one second: poll() will not only return the data
 		# accumulated during the specified poll_length, but also for data
 		# accumulated since the subscribe() or the previous poll.
-		#sleep_length = 1.0
+		sleep_length = 1.0
 
 		# For demonstration only: We could, for example, be processing the data
 		# returned from a previous poll().
-		#time.sleep(sleep_length)
+		# time.sleep(sleep_length)
 
 		# Poll the subscribed data from the data server. Poll will block and record
 		# for poll_length seconds.
@@ -92,7 +96,9 @@ def R_measure(device_id, amplitude, out_channel, in_channel, time_constant, freq
 		data = daq.poll(poll_length, poll_timeout, poll_flags, poll_return_flat_dict)
 
 		# Unsubscribe from all paths.
-		daq.unsubscribe('*')
+		# print('daq.unsubscribe')
+		# daq.unsubscribe('*')
+		# time.sleep(5)
 
 		# Check the dictionary returned is non-empty
 		assert data, "poll() returned an empty data dictionary, did you subscribe to any paths?"

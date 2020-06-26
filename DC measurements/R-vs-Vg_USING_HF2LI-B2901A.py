@@ -33,40 +33,40 @@ import math
 ''' Definitions'''
 
 # definitions
-tempdev = 3.4
-prefix = 'C26_FE_UL_Rs100_'
-path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-04-10 measurements'
+tempdev = 5.9
+prefix = 'F20_FE_e3-1toAll_HF2LI'
+path = 'D:/measurement_data_4KDIY/Hadi/F20 2020-05-11 measurements/'
 
 time_step = 0.1 #time step between each gate voltage steps, to stablize the gate
 ramp_speed = 500 # the safe speed for ramping the gate voltage [mV/s]
-target_gate = 5
+target_gate = 42
 shift_voltage= 0 #in the case the intended gate pattern in not symmetrical around 0.
-gate_points = 200
-safe_gate_current = 5e-3 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
+gate_points = 80
+safe_gate_current = 1e-6 # [A], safe current leakage limit. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
 
 # HF2LI settings
-measure_amplitude = 10 #measurement amplitude [V]
+measure_amplitude = 0.1 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = 20.3e6 #[Hz]
+measure_frequency = 9413 #[Hz]
 demodulation_time_constant = 0.1
 deamodulation_duration = 0.18
 
 
-bias_resistor = 100
+bias_resistor = 1e6
 
 # Calibration parameters; experimentally achieved to adjst the resistance reading
 	# CASE 1: bias resistance of 1M and demodulation_time_constant = 0.1 =>> calibration_factor = 1.45 and shift = 0
 	# CASE 2: bias resistance of 10M and demodulation_time_constant = 0.45 =>> calibration_factor = 0.65 and shift = 400
 
 
-calibration_factor = 1 # 1.45 recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
+calibration_factor = 1.45 #recommended  with bias resistance of 1M and demodulation_time_constant = 0.1 # to compensate the shift in resistance measurement
 shift = 0
-in_range = 2
+in_range = 0.025
 out_range = 10
 diff = True
-add = False
-offset = 0
+add = True
+offset = 2.5
 ac = False
 
 # output setting
@@ -191,11 +191,11 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 		offset = offset,
 		ac = ac)
 
-	# measured[0] = calibration_factor * np.abs(measured[0]) + shift
+	measured[0] = calibration_factor * np.abs(measured[0]) + shift
 
-	Vin = np.abs(measured[4] + 1j*measured[5])
-	r = Vin * bias_resistor/(measure_amplitude - Vin) # thie relation is valid when the phase is close to zero.
-	measured [0] = r
+	# Vin = np.abs(measured[4] + 1j*measured[5])
+	# r = Vin * bias_resistor/(measure_amplitude - Vin) # thie relation is valid when the phase is close to zero.
+	r = measured [0]
 
 	line = [count,gate_voltage, leakage_current] + measured
 
@@ -221,7 +221,7 @@ for count,gate_voltage in enumerate(pattern['ramp_pattern']): # ramping up the g
 	# plt.yscale ('log')
 	plt.ylabel('Resistance ($\Omega$)')
 	# plt.ylim(1, 1000)
-	plt.title(prefix+ " f = {:.1f}MHz, V = {:.1f}, R(bias) = {:.2f} $k\Omega$, ".format(measure_frequency/1e6, measure_amplitude, bias_resistor/1e3))
+	plt.title(prefix+ " f = {:.2f}kHz, offset = {:.1f}V, amp = {:.1f}V, R(bias) = {:.1f}M$\Omega$, ".format(measure_frequency/1e3, offset, measure_amplitude, bias_resistor/1e6))
 
 
 	plt.subplot(2, 1, 2)
@@ -281,7 +281,7 @@ if save_data:
 	# saving the plots
 	title = 'Resistance'
 	caption = ''
-	stlab.autoplot(my_file_2,'gate voltage (V)','Resistance (k ohm)',title=title,caption=caption)
+	stlab.autoplot(my_file_2,'gate voltage (V)','Resistance (ohm)',title=title,caption=caption)
 	title = 'Phase'
 	caption = ''
 	stlab.autoplot(my_file_2,'gate voltage (V)','phase ()',title=title,caption=caption)

@@ -30,6 +30,7 @@ import pygame, sys
 from pygame.locals import *
 from array import *
 from stlab.devices.Cryocon_44C import Cryocon_44C
+from stlab.devices.RS_ZND import RS_ZND
 
 
 ###############################################################################################
@@ -38,19 +39,21 @@ from stlab.devices.Cryocon_44C import Cryocon_44C
 #definitions
 
 prefix = 'C26_UL_TempSweep_'
-title = 'Vg = 3V, Power = 3dBm'
-path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-04-01 measurements'
+title = 'Vg = 0V, Power = +3dBm'
+path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-05-29 measurements'
 
 gate_voltage = 0 #This is not correct: I set the voltage directly on the SMU.
 measure = 'TwoPort' # 'OnePort' or 'TwoPort'
-tdelay_measure = 0.5 #time between resonance measurements
-tdelay_idle = 0.5 # time between temperature measurements
+tdelay_measure = 0.1 #time between resonance measurements
+tdelay_idle = 0.1 # time between temperature measurements
 
 ''' EXTRA paramters (set manually on the VNA)
-start frequency: 8 GHz
-stop frequency: 10 GHz
+start frequency: 4.8433 GHz
+stop frequency: 5.1128 GHz
 resolution: 201 points
-IF bandwidth : 100 Hz
+IF bandwidth: 100 Hz
+power: 3
+no averaging
 '''
 
 low_T = 3.25
@@ -87,7 +90,7 @@ if gate_voltage != 0:
 
 # initializing the ZND
 # ZND = RS_ZND('TCPIP::192.168.1.149::INSTR', reset=False)
-VNA = stlab.adi(addr='TCPIP::192.168.1.230::INSTR',reset=False) # this is FieldFox
+VNA = RS_ZND('TCPIP::192.168.1.149::INSTR', reset=False)
 
 
 # initializing temperature sensor

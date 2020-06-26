@@ -22,27 +22,27 @@ prefix = 'C26_UL_FrequencySweep_Rs100'
 path = 'D:\\measurement_data_4KDIY\\Hadi\\C26 2020-04-10 measurements'
 
 # HF2LI settings
-measure_amplitude = 10 #measurement amplitude [V]
+measure_amplitude = 500e-3 #measurement amplitude [V]
 measure_output_channnel = 1
 measure_input_channnel = 1
-measure_frequency = np.linspace(40e6,50e6,50) #[Hz]
+measure_frequency = np.linspace(1,1e3,100) #[Hz]
 
 
 demodulation_time_constant = 0.1
 deamodulation_duration = 0.18
 
-calibration_factor = 1 # to compensate the shift in resistance measurement
+calibration_factor = 1.45 # to compensate the shift in resistance measurement
 shift = 0
-bias_resistor = 100
+bias_resistor = 20e6
 
-in_range = 2
-out_range = 10
+in_range = 10e-3
+out_range = 1
 diff = True
 add = False
 offset = 0
 ac = False
 
-save_data = True
+save_data = False
 
 if save_data:
 	colnames = ['frequency (Hz)','resistance (ohm)','impedence (ohm)','phase ()', 'demodulation duration (s)', 'Vx (V)', 'Vy (V)']
@@ -62,6 +62,23 @@ zhinst.utils.api_server_version_check(daq)
 zhinst.utils.disable_everything(daq, device)
 out_mixer_channel = zhinst.utils.default_output_mixer_channel(props)
 
+R_measure(device_id = 'dev352',
+		amplitude = measure_amplitude,
+		out_channel = measure_output_channnel,
+		in_channel = measure_input_channnel,
+		time_constant = demodulation_time_constant,
+		frequency = measure_frequency[0],
+		poll_length = deamodulation_duration,
+		device = device,
+		daq = daq,
+		out_mixer_channel = out_mixer_channel,
+		bias_resistor = bias_resistor,
+		in_range = in_range,
+		out_range = out_range,
+		diff = diff,
+		add = add,
+		offset = offset,
+		ac = ac)
 
 
 #############################################################
