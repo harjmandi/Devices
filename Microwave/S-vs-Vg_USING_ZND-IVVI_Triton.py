@@ -28,34 +28,35 @@ from gate_pattern import gate_pattern
 import matplotlib.pyplot as plt
 import pygame, sys
 from pygame.locals import *
-from stlab.devices.Keysight_B2901A import Keysight_B2901A
+from stlab.devices.IVVI import IVVI_DAC
 from stlab.devices.RS_ZND import RS_ZND
+from stlab.devices.TritonWrapper import TritonWrapper as tritonclass
+
 
 
 ###############################################################################################
 ''' Definitions'''
 
 #definitions
-temp = 3.32 # read it manually
-title = 'C26_LL_GateSweep_'
+title = 'C26_UL_GateSweep_BottomUp'
 path = 'F:\\measurement_data_triton\\Hadi\\C\\C26 2020-06-26 measurements'
 figures_path = path+'/All_Results'
 
-time_step = 1#20 #time step between each gate voltage steps, to stablize the gate
+time_step = 1 #time step between each gate voltage steps, to stablize the gate
 ramp_spead = 10 # the safe spead for ramping the gate voltage [mV/s]
-min_gate = -15 #
-max_gate = 15
+min_gate = -0.8 #
+max_gate = 0.8
 gate_points = 500
 
 monitor_ratio = 10 #shows 1 out of "monitor_ratio" spectrums
 safe_gate_current = 5e-3 # [A], safe current leakage limit, above this limit S1h unit gives an error. With in this limit, the oxide resistance below 4MOhm at 10Vg (400KOhm at 1Vg)) to be considerred not leacky!
 
-start_freq = 4.7737  # start grequency [GHz]
-stop_freq = 5.3889 # stop frequency [GHz] maximum 8.5GHZ for ZND
-freq_points = 1001 # frequency sweep points
+start_freq = 4.895  # start grequency [GHz]
+stop_freq = 5.248 # stop frequency [GHz] maximum 8.5GHZ for ZND
+freq_points = 2001 # frequency sweep points
 #IF bandwidth= 1000, this is for my own records and does not affect the VNA settings.
 
-power = -45 #sweep power [dB] range: -45 to 3 dB
+power = -40 #sweep power [dB] range: -45 to 3 dB
 measure = 'TwoPort' # 'OnePort' or 'TwoPort'
 averaging  = 1
 
@@ -84,22 +85,40 @@ measure_frequency = np.linspace(start_freq,stop_freq,freq_points)
 ##########################################################
 ''' Initializing the devices '''
 
-# Keysight setting
-gate_dev = Keysight_B2901A('TCPIP::192.168.1.63::INSTR')
-gate_dev.SetModeVoltage()
-gate_dev.SetComplianceCurrent(safe_gate_current)
-gate_dev.SetOutputOn()
+# IVVI settings
+s1h_gain = 45*(1/101) # [V/V] manual gain set on S1h module, the second term (101/1) is made externally using a voltage devider 
+DAC = 1 # DAC linked to the S1h
+dev = IVVI_DAC('COM5') # IVVI
+dev.RampAllZero()
 
 
+
+# initializing the Keithley for gate current measurement
+vmeasure = stlab.adi('TCPIP::192.168.1.105::INSTR') # with Keithley DMM6500
+
+vmeasure.write('SENS:VOLT:DC:RANG:AUTO 0')
+vmeasure.write('SENS:VOLT:DC:RANGE 10')
+vmeasure.write(':INIT:CONT 0')
+vmeasure.write('VOLT:NPLC 1')
+vmeasure.write('TRIG:SOUR IMM')
+vmeasure.write(":SYST:AZER:STAT OFF")
+vmeasure.write(":TRIG:COUN 1")
+gate_leakage_v_I_conversion = 1e-6
+
+#Triton
+mytriton = tritonclass()
 
 # initializing the ZND
 VNA = RS_ZND('TCPIP::192.168.1.149::INSTR', reset=False)
-# VNA.SetSweepfrequency(start_freq, stop_freq, freq_points)
-# VNA.SetPower(power) #[db] minimum -30db
-# VNA.SetIFBW(1e3) #Set IF bandwidth in Hz
-# VNA.SetSweepTime(SweepTime)
+VNA.SetStart(start_freq*1e9)
+VNA.SetEnd(stop_freq*1e9)
 
-# VNA.AutoScale()
+VNA.SetPoints(freq_points)
+VNA.SetPower(power) #[db] minimum -30db
+VNA.SetIFBW(1e3) #Set IF bandwidth in Hz
+# VNA.SetSweepTime(SweepTime)
+VNA.AutoScale()
+
 # # VNA.write('INST:SEL "NA"')  #set mode to Network Analyzer
 # if measure == 'OnePort':
 # 	VNA.SinglePort()
@@ -118,9 +137,11 @@ VNA = RS_ZND('TCPIP::192.168.1.149::INSTR', reset=False)
 ''' measurements '''
 # generating gate pattern
 gate_pattern = np.linspace(min_gate, max_gate,gate_points)
+if np.max(np.abs(gate_pattern)) > 2*s1h_gain:
+	print('Adjust the S1h Level.')
+	exit()
 # modulating the gate voltage
 ramp_time = np.abs(np.floor(gate_pattern[0]/ramp_spead))
-gate_dev.RampVoltage(gate_pattern[0],tt=10*ramp_time, steps = 100)
 gate_voltage_step = gate_pattern[1]-gate_pattern[0]
 ramp_time = np.abs(np.floor(gate_voltage_step/ramp_spead))
 
@@ -134,25 +155,21 @@ gate = np.array([])
 Leakage_current = np.array([])
 
 t_in = time.time()
+
+dev.RampVoltage(DAC,gate_pattern[0]*1000/s1h_gain, tt = 90)
+time.sleep(10*time_step)
+
 for count,gate_voltage in enumerate(gate_pattern): # ramping up the gate voltage
 
 
-	gate_dev.RampVoltage(gate_voltage,tt=ramp_time, steps = 5)
-
-	leakage_current = float(gate_dev.GetCurrent()) # in the units of [A]
-	Leakage_current = np.append(Leakage_current,leakage_current)
-
-	# if np.abs(leakage_current) > safe_gate_current:
-	# 	GATE_LEAKAGE = True
-	# 	print ('gate current', leakage_current, ' nA exceeds safe gate current limit reaching the gate voltage of', gate_voltage, 'V.')
-	# 	print ('dielectric resitance is only', oxide_resistance, 'MOhms.')
-	# 	print ('reseting the gate voltage')
-	# 	dev.RampVoltage(DAC,0,tt=ramp_time)
-	# 	break
-	# print ('\n\n------------------------')
-
-
+	dev.RampVoltage(DAC,gate_voltage*1000/s1h_gain)
 	time.sleep(time_step)
+
+	leakage_current = gate_leakage_v_I_conversion*float(vmeasure.query('READ?')) # in the units of [nA]
+	Leakage_current = np.append(Leakage_current,leakage_current)
+	print ('\n\n------------------------')
+		
+
 
 	for j in range(averaging):
 		data = VNA.MeasureScreen_pd()
@@ -213,38 +230,36 @@ for count,gate_voltage in enumerate(gate_pattern): # ramping up the gate voltage
 		plt.xlabel('Frequency (GHz)')
 
 
-
-
-
-		# plt.subplot(4, 1, 4)
-		# plt.contourf(data['Frequency (Hz)']*1e-9,pattern['ramp_pattern'][0:count+1],S_phase*180/np.pi)
-		# plt.ylabel('$V_g$ (V)')
-		# plt.title('Phase (°)', backgroundcolor = 'white')
-
-
 	plt.pause(0.1)
+
 
 
 	if save_data:
 
-		# temp = tempdev.GetTemperature()
-		data['Power (dBm)'] = VNA.GetPower()
-		data['Gate Voltage (V)'] = gate_voltage
-		data['Leakage Current (A)'] = leakage_current
-		data['Temperature (K)'] = temp
+	    temp = np.mean(mytriton.gettemperature(8))
+	    data['Power (dBm)'] = VNA.GetPower()
+	    data['Gate Voltage (V)'] = gate_voltage
+	    data['Leakage Current (A)'] = leakage_current
+	    data['Temperature (K)'] = temp
 
-		if count==0:
-			colnames = ['Vset (V)', 'Imeas (A)', 'R (Ohm)', 'Vgate (V)', 'T (K)', 'Ileakage (nA)']
+	    if count==0:
+	        Data = stlab.newfile(prefix,'_',data.keys(),autoindex = True, mypath= path)
+	        # stlab.metagen.fromarrays(Data,measure_frequency,-gate_pattern,[],xtitle='frequency (Hz)', ytitle='gate voltage (V)')
+	        # stlab.metagen.fromlimits(Data,freq_points,start_freq,stop_freq,gate_points,min_gate,max_gate,Nz=None,zmin=None,zmax=None,xtitle='frequency (Hz)', ytitle='gate voltage (V)',ztitle='',colnames=None)
 
-			Data = stlab.newfile(prefix,'_',colnames,autoindex = True, mypath= path)
+
+	    stlab.savedict(Data, data)
 
 
+	for event in pygame.event.get(): # stopping if 's' pressed
+	    if event.type == QUIT: sys.exit()
 
-		stlab.savedict(Data, data)
-
+	    if event.type == KEYDOWN and event.dict['key'] == 115: # corresponding to character "s"
+	        STOP = True
 
 	if STOP:
-		break
+	    break
+
 
 
 	t = time.time()
@@ -255,7 +270,9 @@ for count,gate_voltage in enumerate(gate_pattern): # ramping up the gate voltage
 	print('REMAINING TIME: {:.2f} min'.format(time_remain/60))
 
 
-gate_dev.RampVoltage(0,tt=ramp_time) # to safely return back the gate voltage
+dev.RampVoltage(DAC,0, tt = 60)
+dev.close()
+colnames = ['Frequency (Hz)', 'S21re ()', 'S21im ()', 'S21dB (dB)', 'S21Ph (rad)', 'Power (dBm)', 'Gate Voltage (V)', 'Leakage Current (A)', 'Temperature (K)']
 stlab.metagen.fromarrays(Data,frequency_pattern,gate_pattern[0:count+1],xtitle='frequency (Hz)', ytitle='gate voltage (V)',ztitle='',colnames=colnames)
 
 print('FINISHED')
@@ -266,7 +283,7 @@ print('FINISHED')
 if save_data:
 
 	plt.savefig(os.path.dirname(Data.name)+'\\'+prefix)
-	# plt.savefig(figures_path+'\\'+str(start_freq)+'GHz.jpg')
+	plt.savefig(figures_path+'\\'+str(start_freq)+'GHz.jpg')
 
 	Data.close()
 	plt.close()
