@@ -33,56 +33,7 @@ import stlabutils
 
 from stlab.devices.RS_ZND import RS_ZND
 
-# Functions NOTE: ideally this functions has to be intergrated into a TENMA class; but I did not manage to do that yet. so I put them here. 
-def numtostr(mystr):
-    return '%.2f' % mystr
 
-def SetRemote (gate_device):
-    gate_device.write("SYSTEM:REMOTE")
-
-def SetLocal (gate_device):
-    gate_device.write("SYSTEM:LOCAL")
-
-def SetVoltage(gate_device, Vol):
-    mystr = numtostr(Vol)
-    mystr = ':SOUR:VOLT:LEV ' + mystr
-    gate_device.write(mystr)
-    # gate_dev.write(":SOUR:VOLT:LEV 2.8")
-
-def GetVoltage(gate_device):  
-        volt = gate_device.query("MEAS:VOLT?")
-        return float(volt)
-
-def RampVoltage(gate_device, mvoltage, tt=5., steps=100):  #To ramp voltage over 'tt' seconds from current DAC value.
-    v0 = GetVoltage(gate_device)
-    print('v0 =',v0)
-    if np.abs(mvoltage - v0) < 1e-2:
-        SetVoltage(gate_device,mvoltage)
-        return
-    voltages = np.linspace(v0, mvoltage, steps)
-    twait = tt / steps
-    for vv in voltages:
-        SetVoltage(gate_device,vv)
-        time.sleep(twait)
-
-def GetCurrent(gate_device):  # (manual entry) Preset and make a DC current measurement with the specified range and resolution. The reading is sent to the output buffer.
-        # range and res can be numbers or MAX, MIN, DEF
-        # Lower resolution means more digits of precision (and slower measurement).  The number given is the voltage precision desired.  If value is too low, the query will timeout
-        num = gate_device.query("MEAS:CURR?")
-        return float(num)
-
-def TurnOn(gate_device):
-    gate_device.write("OUTP:STAT:ALL 1")
-
-
-def TurnOff(gate_device):
-    gate_device.write("OUTP:STAT:ALL 0")
-
-def Close(gate_device):
-    gate_device.close()
-
-def WhoIsIt(gate_device):
-    gate_device.query("*IND?")
 
 ###############################################################################################
 ''' Definitions'''
@@ -91,12 +42,7 @@ def WhoIsIt(gate_device):
 title = 'A44_5-2_5p3_01_'
 path = 'C:\\Users\\Hadi\\surfdrive\\01_Lab Journals\\A_Nonlinearity in graphene resonators\\A44 2021-03-15 measurements\\Day 1'
 
-time_step = 1#20 #time step between each gate voltage steps, to stablize the gate
-ramp_spead = 0.2 # the safe spead for ramping the gate voltage [V/s]
-start_gate = 0 #
-stop_gate = 10
 
-gate_points = 100
 
 monitor_ratio = 5 #shows 1 out of "monitor_ratio" spectrums
 show_figure = True
@@ -106,11 +52,9 @@ stop_freq = 80 # stop frequency [GHz] maximum 8.5GHZ for ZND
 freq_points = 2501 # frequency sweep points
 #IF bandwidth= 10k, this is for my own records and does not affect the VNA settings.
 
-power = 10 #sweep power [dB] range: -45 to 3 dB
-averaging  = 1
+Voltage = 10 #sweep power [dB] range: -45 to 3 dB
 
 frequency_pattern = np.linspace(start_freq, stop_freq, freq_points)
-gate_pattern = np.linspace(start_gate,stop_gate, gate_points)
 
 
 
